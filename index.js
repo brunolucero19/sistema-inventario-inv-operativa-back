@@ -1,7 +1,8 @@
 import express from 'express'
-import pool from './config/db.js'
 import corsMiddleware from './middleware/corsMiddleware.js'
 import dotenv from 'dotenv'
+import router from './src/routes/index.js'
+
 dotenv.config()
 
 const app = express()
@@ -11,9 +12,7 @@ app.use(express.json())
 app.use(corsMiddleware)
 
 // Ruta raíz
-app.get('/', (req, res) => {
-  res.send({ message: 'Conexión exitosa a la API' })
-})
+app.use('/api', router)
 
 // Iniciar servidor
 app.listen(PORT, () => {
