@@ -10,12 +10,13 @@ export const crearProveedor = async (req, res) => {
     return res.status(400).json({ error: result.error.issues })
   }
 
-  const { nombre, email, telefono } = result.data
+  const { nombre, apellido, email, telefono } = result.data
 
   try {
     const nuevoProveedor = await prisma.proveedor.create({
       data: {
         nombre,
+        apellido,
         email,
         telefono,
       },

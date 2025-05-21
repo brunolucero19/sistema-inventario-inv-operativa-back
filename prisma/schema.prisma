@@ -16,6 +16,7 @@ datasource db {
 model Proveedor {
   id Int @default(autoincrement())
   nombre String
+  apellido String
   email String @unique
   telefono String?
   fechaCreacion DateTime @default(now())
