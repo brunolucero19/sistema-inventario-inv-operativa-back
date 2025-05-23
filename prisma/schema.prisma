@@ -14,7 +14,7 @@ datasource db {
 }
 
 model Proveedor {
-  id Int @default(autoincrement())
+  id Int @id @default(autoincrement())
   nombre String
   apellido String
   email String @unique
