@@ -14,7 +14,7 @@ datasource db {
 }
 
 model Proveedor {
-  id Int @id @default(autoincrement())
+  id_proveedor Int @id @default(autoincrement())
   nombre String
   apellido String
   email String @unique
@@ -24,4 +24,11 @@ model Proveedor {
   
   @@map("Proveedores") // nombre real de la tabla en la DB
 
+}
+
+model Articulo {
+  id_articulo Int @id @default(autoincrement())
+  nombre String
+
+   @@map("Articulos")
 }
