@@ -45,3 +45,35 @@ export const crearArticulo = async (req, res) => {
     })
   }
 }
+
+export const obtenerArticulos = async (req, res) => {
+  try {
+    const articulos = await prisma.articulo.findMany()
+    res.status(200).json(articulos)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: [{ message: 'Error al obtener los artículos' }],
+    })
+  }
+}
+
+export const obtenerArticulo = async (req, res) => {
+  const id = req.params.id 
+  if (!id) {
+    return res.status(400).json({ error: 'Falta el id' })
+  }
+  try {
+    const articulo = await prisma.articulo.findUnique({
+      where: { id_articulo: parseInt(id) }
+    })
+    if (!articulo) {
+      return res.status(404).json({ error: 'Artículo no encontrado' })
+    }
+    res.json(articulo)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: 'Error al obtener el artículo' })
+  }
+}
+
