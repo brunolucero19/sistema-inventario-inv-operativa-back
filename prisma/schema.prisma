@@ -46,13 +46,13 @@ model Venta {
 }
 
 model DetalleVenta {
-  id           Int      @id @default(autoincrement())
-  cantidad     Int
-  totalDetalle Float
-  ventaId      Int
-  venta        Venta    @relation(fields: [ventaId], references: [id_venta])
-  articuloId   Int
-  articulo     Articulo @relation(fields: [articuloId], references: [id_articulo])
+  id_detalleVenta Int      @id @default(autoincrement())
+  cantidad        Int
+  totalDetalle    Float
+  id_venta         Int
+  venta           Venta    @relation(fields: [id_venta], references: [id_venta], onDelete: Cascade) //Si se elimina Venta se eliminan sus detalles
+  id_articulo      Int
+  articulo        Articulo @relation(fields: [id_articulo], references: [id_articulo])
 
   @@map("DetallesVenta")
 }
