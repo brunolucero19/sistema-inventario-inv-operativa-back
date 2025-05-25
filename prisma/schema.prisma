@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,14 +8,30 @@ datasource db {
 }
 
 model Proveedor {
-  id Int @id @default(autoincrement())
-  nombre String
-  apellido String
-  email String @unique
-  telefono String?
-  fechaCreacion DateTime @default(now())
-  fechaBaja DateTime?
-  
-  @@map("Proveedores") // nombre real de la tabla en la DB
+  nombre        String
+  email         String    @unique
+  telefono      String?
+  fechaCreacion DateTime  @default(now())
+  fechaBaja     DateTime?
+  apellido      String
+  id_proveedor  Int       @id @default(autoincrement())
 
+  @@map("Proveedores")
 }
+
+model Articulo {
+  id_articulo Int @id @default(autoincrement())
+  nombre String
+  descripcion  String
+  demanda_articulo Int
+  costo_almacenamiento Float
+  stock Int
+  precioVenta Float
+  cgi Float
+  stock_seguridad Int
+  inventario_maximo Int
+  fechaBaja DateTime? 
+
+  @@map("Articulos")
+}
+
