@@ -20,18 +20,39 @@ model Proveedor {
 }
 
 model Articulo {
-  id_articulo Int @id @default(autoincrement())
-  nombre String
-  descripcion  String
-  demanda_articulo Int
+  id_articulo          Int            @id @default(autoincrement())
+  nombre               String
+  descripcion          String
+  demanda_articulo     Int
   costo_almacenamiento Float
-  stock Int
-  precioVenta Float
-  cgi Float
-  stock_seguridad Int
-  inventario_maximo Int
-  fechaBaja DateTime? 
+  stock                Int
+  precioVenta          Float
+  cgi                  Float
+  stock_seguridad      Int
+  inventario_maximo    Int
+  fechaBaja            DateTime?
+  detallesVenta        DetalleVenta[]
 
   @@map("Articulos")
 }
 
+model Venta {
+  id_venta   Int            @id @default(autoincrement())
+  fechaVenta DateTime
+  montoTotal Float
+  detalles   DetalleVenta[]
+
+  @@map("Ventas")
+}
+
+model DetalleVenta {
+  id_detalleVenta Int      @id @default(autoincrement())
+  cantidad        Int
+  totalDetalle    Float
+  id_venta         Int
+  venta           Venta    @relation(fields: [id_venta], references: [id_venta], onDelete: Cascade) //Si se elimina Venta se eliminan sus detalles
+  id_articulo      Int
+  articulo        Articulo @relation(fields: [id_articulo], references: [id_articulo])
+
+  @@map("DetallesVenta")
+}
