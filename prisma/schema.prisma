@@ -8,37 +8,37 @@ datasource db {
 }
 
 model Proveedor {
+  id_proveedor  Int       @id @default(autoincrement())
   nombre        String
+  apellido      String
   email         String    @unique
   telefono      String?
   fechaCreacion DateTime  @default(now())
   fechaBaja     DateTime?
-  apellido      String
-  id_proveedor  Int       @id @default(autoincrement())
+  proveedoresArticulo  ProveedorArticulo[]
 
   @@map("Proveedores")
 }
 
 model Articulo {
   id_articulo          Int            @id @default(autoincrement())
-  nombre               String
   descripcion          String
   demanda_articulo     Int
   costo_almacenamiento Float
   stock                Int
   precioVenta          Float
-  cgi                  Float
   stock_seguridad      Int
   inventario_maximo    Int
   fechaBaja            DateTime?
   detallesVenta        DetalleVenta[]
+  proveedoresArticulo  ProveedorArticulo[]
 
   @@map("Articulos")
 }
 
 model Venta {
   id_venta   Int            @id @default(autoincrement())
-  fechaVenta DateTime
+  fechaVenta DateTime       @default(now())
   montoTotal Float
   detalles   DetalleVenta[]
 
@@ -55,4 +55,58 @@ model DetalleVenta {
   articulo        Articulo @relation(fields: [id_articulo], references: [id_articulo])
 
   @@map("DetallesVenta")
+}
+
+
+model OrdenCompra {
+  id_orden_compra Int      @id @default(autoincrement())
+  cantidad Int
+  monto_total Float
+  fecha_estimada_recepcion DateTime?
+  fecha_real_recepcion DateTime?
+  id_proveedor_articulo  Int
+  proveedorArticulo  ProveedorArticulo @relation(fields: [id_proveedor_articulo], references: [id_proveedor_articulo])
+  id_estado_orden_compra  Int
+  estadoOrdenCompra  EstadoOrdenCompra @relation(fields: [id_estado_orden_compra], references: [id_estado_orden_compra])
+
+  @@map("OrdenesCompra")
+}
+
+model EstadoOrdenCompra {
+  id_estado_orden_compra Int @id @default(autoincrement())
+  nombre_eoc String
+
+  ordenesCompra OrdenCompra[]
+
+  @@map("EstadosOrdenCompra")
+}
+
+model ProveedorArticulo {
+  id_proveedor_articulo Int      @id @default(autoincrement())
+  costo_pedido Float
+  costo_compra Float 
+  precio_unitario Float
+  demora_entrega Int
+  cgi Float?
+  modelo_seleccionado String
+  id_articulo      Int
+  articulo        Articulo @relation(fields: [id_articulo], references: [id_articulo])
+  id_proveedor    Int
+  proveedor        Proveedor @relation(fields: [id_proveedor], references: [id_proveedor])
+
+  modeloInventario ModeloInventario?
+  ordenesCompra  OrdenCompra[] 
+
+  @@map("ProveedorArticulo")
+}
+
+model ModeloInventario {
+  id_modelo_inventario Int      @id @default(autoincrement())
+  lote_optimo  Int?
+  punto_pedido Int?
+
+  id_proveedor_articulo Int @unique
+  proveedorArticulo ProveedorArticulo @relation(fields: [id_proveedor_articulo], references: [id_proveedor_articulo])
+
+  @@map("ModeloInventario")
 }
