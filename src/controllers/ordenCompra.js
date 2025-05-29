@@ -3,7 +3,7 @@ import { validateOrdenCompra } from '../validators/ordenCompra.schema.js'
 
 const prisma = new PrismaClient()
 
-// Crear OC
+// POST
 export const crearOrdenCompra = async (req, res) => {
   const result = validateOrdenCompra(req.body)
 
@@ -21,10 +21,10 @@ export const crearOrdenCompra = async (req, res) => {
     const nuevaOrdenCompra = await prisma.ordenCompra.create({
       data: {
         cantidad,
-        monto_total: 1,
+        monto_total: 0,
         fecha_estimada_recepcion: new Date(fechaEntrega),
         id_proveedor_articulo,
-        id_estado_orden_compra: 1, //es el estado pendiente definido en compu valen
+        id_estado_orden_compra: 1, //Se me crea con estado pendiente por defecto 
       },
     })
 
@@ -35,18 +35,59 @@ export const crearOrdenCompra = async (req, res) => {
   }
 }
 
-//Actualizar OC
-export const actualizarOrdenCompra = async (req, res) => {
-  const idOrdenCompra = parseInt(req.params.id);
-  const { cantidad: nuevaCantidad } = req.body;
+//GET ALL
+export const obtenerOrdenesCompra = async (req, res) => {
+  try {
+    const ordenesCompra = await prisma.ordenCompra.findMany({
+      include: {
+        proveedorArticulo: true,
+        estadoOrdenCompra: true,
+      },
+    })
 
-  if (!nuevaCantidad || isNaN(idOrdenCompra)) {
-    return res.status(400).json({ error: "Faltan datos o formato inválido" });
+    res.status(200).json(ordenesCompra)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: error.message })
+  }
+}
+
+// GET POR ID
+export const obtenerOrdenCompra = async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const ordenCompra = await prisma.ordenCompra.findUnique({
+      where: { id_orden_compra: parseInt(id) },
+      include: {
+        proveedorArticulo: true,
+        estadoOrdenCompra: true,
+      },
+    })
+
+    if (!ordenCompra) {
+      return res.status(404).json({ error: 'Orden de compra no encontrada' })
+    }
+
+    res.status(200).json(ordenCompra)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: error.message })
+  }
+}
+
+// PATCH
+export const actualizarOrdenCompra = async (req, res) => {
+  const { id } = req.params;
+  const { cantidad } = req.body;
+
+  if (!cantidad || isNaN(cantidad) || cantidad <= 0) {
+    return res.status(400).json({ error: 'Cantidad inválida' });
   }
 
   try {
     const ordenCompra = await prisma.ordenCompra.findUnique({
-      where: { id_orden_compra: idOrdenCompra },
+      where: { id_orden_compra: parseInt(id) },
       include: { proveedorArticulo: true },
     });
 
@@ -55,17 +96,17 @@ export const actualizarOrdenCompra = async (req, res) => {
     }
 
     const precioUnitario = ordenCompra.proveedorArticulo.precio_unitario;
-    const nuevoMontoTotal = precioUnitario * nuevaCantidad;
+    const nuevoMontoTotal = precioUnitario * cantidad;
 
     const ordenActualizada = await prisma.ordenCompra.update({
-      where: { id_orden_compra: idOrdenCompra },
+      where: { id_orden_compra: parseInt(id) },
       data: {
-        cantidad: nuevaCantidad,
+        cantidad,
         monto_total: nuevoMontoTotal,
       },
     });
 
-    res.json(ordenActualizada);
+    res.status(200).json(ordenActualizada);
   } catch (error) {
     console.error('Error al actualizar la orden de compra:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
