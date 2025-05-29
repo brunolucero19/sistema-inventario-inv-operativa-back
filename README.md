@@ -66,6 +66,11 @@ npm install
    npx prisma migrate deploy
    ```
 
+3. Generar cliente:
+
+   ```bash
+   npm run generate
+   ```
 ---
 
 ## Comandos útiles

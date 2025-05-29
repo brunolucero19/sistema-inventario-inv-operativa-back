@@ -11,13 +11,11 @@ export const crearArticulo = async (req, res) => {
   }
 
   const {
-    nombre,
     descripcion,
     demanda_articulo,
     costo_almacenamiento,
     stock,
     precioVenta,
-    cgi,
     stock_seguridad,
     inventario_maximo
   } = result.data
@@ -25,13 +23,11 @@ export const crearArticulo = async (req, res) => {
   try {
     const nuevoArticulo = await prisma.articulo.create({
       data: {
-        nombre,
         descripcion,
         demanda_articulo,
         costo_almacenamiento,
         stock,
         precioVenta,
-        cgi,
         stock_seguridad,
         inventario_maximo
       },

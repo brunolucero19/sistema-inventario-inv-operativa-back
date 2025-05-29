@@ -9,4 +9,8 @@ router.get('/leer-articulos', obtenerArticulos)
 
 router.get('/leer-articulo/:id', obtenerArticulo)
 
+// router.put('/actualizar-articulo/:id', actualizarArticulo)
+
+// router.delete('/eliminar-articulo/:id', eliminarArticulo)
+
 export default router
