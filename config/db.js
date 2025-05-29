@@ -10,6 +10,7 @@ const pool = new Pool({
   connectionString: DATABASE_URL,
 })
 
+console.log('Iniciando conexión a la base de datos...');
 pool
   .connect()
   .then((client) => {

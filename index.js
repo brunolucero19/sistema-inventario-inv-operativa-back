@@ -2,6 +2,8 @@ import express from 'express'
 import corsMiddleware from './middleware/corsMiddleware.js'
 import dotenv from 'dotenv'
 import router from './src/routes/index.js'
+import morgan from 'morgan'
+import './config/db.js'
 
 dotenv.config()
 
@@ -9,6 +11,7 @@ const app = express()
 const PORT = process.env.PORT || 3000
 
 app.use(express.json())
+app.use(morgan('dev'))
 app.use(corsMiddleware)
 
 // Ruta raíz
