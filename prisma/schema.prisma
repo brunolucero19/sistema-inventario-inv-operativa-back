@@ -90,12 +90,14 @@ model ProveedorArticulo {
   cgi Float?
   modelo_seleccionado String
   id_articulo      Int
-  articulo        Articulo @relation(fields: [id_articulo], references: [id_articulo])
+  articulo        Articulo @relation(fields: [id_articulo], references: [id_articulo], onDelete: Cascade)
   id_proveedor    Int
-  proveedor        Proveedor @relation(fields: [id_proveedor], references: [id_proveedor])
+  proveedor        Proveedor @relation(fields: [id_proveedor], references: [id_proveedor],  onDelete: Cascade)
 
   modeloInventario ModeloInventario?
   ordenesCompra  OrdenCompra[] 
+
+  @@unique([id_proveedor, id_articulo])
 
   @@map("ProveedorArticulo")
 }
