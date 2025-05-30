@@ -33,3 +33,17 @@ export const crearProveedor = async (req, res) => {
     })
   }
 }
+
+export const obtenerProveedores = async (req, res) => {
+  try {
+    const proveedores = await prisma.proveedor.findMany({
+      where: { fechaBaja: null },
+    })
+    res.status(200).json(proveedores)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: [{ message: 'Error al obtener los proveedores' }],
+    })
+  }
+}
