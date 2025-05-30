@@ -2,6 +2,8 @@ import { PrismaClient } from '@prisma/client'
 import { validateProveedorArticulo } from '../validators/proveedorArticulo.schema.js'
 
 const prisma = new PrismaClient()
+
+//POST
 export const crearProveedorArticulo = async (req, res) => {
   const result = validateProveedorArticulo(req.body)
 
@@ -40,3 +42,26 @@ export const crearProveedorArticulo = async (req, res) => {
     
   }
 }
+
+//Todos los proveedores por aritculo 
+export const obtenerProveedoresPorArticulo = async (req, res) => {
+  const idArticulo = Number(req.params.id);
+
+  try {
+    const resultados = await prisma.proveedorArticulo.findMany({
+      where: { id_articulo: idArticulo },
+      include: {
+        proveedor: true,
+        articulo: true
+      }
+    });
+
+    res.status(200).json(resultados);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: [{ message: 'Error al obtener proveedores por artículo' }],
+    });
+  }
+};
+
