@@ -55,7 +55,7 @@ export const obtenerArticulos = async (req, res) => {
 }
 
 export const obtenerArticulo = async (req, res) => {
-  const id = req.params.id 
+  const id = req.params.id
   if (!id) {
     return res.status(400).json({ error: 'Falta el id' })
   }
@@ -70,6 +70,37 @@ export const obtenerArticulo = async (req, res) => {
   } catch (error) {
     console.error(error)
     res.status(500).json({ error: 'Error al obtener el artículo' })
+  }
+}
+
+export const modificarArticulo = async (req, res) => {
+  const id = req.params.id
+  const result = validateArticulo(req.body)
+
+  if (!id) {
+    return res.status(400).json({ error: 'Falta el id' })
+  }
+
+
+  if (result.error) {
+    return res.status(400).json({ error: result.error.issues })
+  }
+
+  try {
+    const articuloActualizado = await prisma.articulo.update({
+      where: {
+        id_articulo: +id
+      },
+
+      data: result.data
+    })
+    res.json(articuloActualizado)
+
+  } catch (error) {
+    console.error(error)
+    if(error.code === "P2025") return res.status(404).json({ error: 'No se encontró un artículo con ese id' })
+
+    res.status(500).json({ error: 'Error al actualizar el artículo' })
   }
 }
 
