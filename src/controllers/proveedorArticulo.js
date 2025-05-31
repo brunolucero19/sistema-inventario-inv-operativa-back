@@ -49,7 +49,7 @@ export const obtenerProveedoresPorArticulo = async (req, res) => {
 
   try {
     const resultados = await prisma.proveedorArticulo.findMany({
-      where: { id_articulo: idArticulo },
+      where: { id_articulo: +idArticulo },
       include: {
         proveedor: true,
         articulo: true
