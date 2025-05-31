@@ -49,7 +49,7 @@ export const obtenerProveedoresPorArticulo = async (req, res) => {
 
   try {
     const resultados = await prisma.proveedorArticulo.findMany({
-      where: { id_articulo: idArticulo },
+      where: { id_articulo: +idArticulo },
       include: {
         proveedor: true,
         articulo: true
@@ -65,3 +65,23 @@ export const obtenerProveedoresPorArticulo = async (req, res) => {
   }
 };
 
+//Todos los articulos por proveedor
+export const obtenrArticulosPorProveedor = async (req,res) =>{
+  const idProveedor = req.params.id;
+
+  try{
+    const data = await prisma.proveedorArticulo.findMany({
+      where: {id_proveedor: +idProveedor},
+      include:{
+        proveedor: true,
+        articulo: true
+      }
+    })
+
+    res.status(200).json(data);
+
+  } catch (error){
+    console.error(error);
+    res.status(500).json({error: [{ message: 'Error al obtener artículos por proveedor' }]});
+  }
+}
