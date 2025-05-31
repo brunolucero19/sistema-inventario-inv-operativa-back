@@ -45,7 +45,7 @@ export const crearProveedorArticulo = async (req, res) => {
 
 //Todos los proveedores por aritculo 
 export const obtenerProveedoresPorArticulo = async (req, res) => {
-  const idArticulo = Number(req.params.id);
+  const idArticulo = req.params.id;
 
   try {
     const resultados = await prisma.proveedorArticulo.findMany({
