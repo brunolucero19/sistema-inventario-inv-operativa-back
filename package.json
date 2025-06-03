@@ -9,6 +9,9 @@
     "dev": "nodemon index.js",
     "generate": "prisma generate"
   },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "type": "module",
   "author": "sistematicos",
   "license": "ISC",
