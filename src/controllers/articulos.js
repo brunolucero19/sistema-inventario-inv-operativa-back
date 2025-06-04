@@ -118,7 +118,10 @@ export const eliminarArticulo = async (req, res) => {
   try {
     const ordenPendiente = await prisma.ordenCompra.findFirst({
       where: {
-        id_estado_orden_compra: estadosOC.pendiente,
+        or: [
+          { id_estado_orden_compra: estadosOC.pendiente },
+          { id_estado_orden_compra: estadosOC.enviada },
+        ],
         proveedorArticulo: {
           id_articulo: +id,
         },
