@@ -120,8 +120,7 @@ export const eliminarArticulo = async (req, res) => {
       where: {
         id_estado_orden_compra: estadosOC.pendiente,
         proveedorArticulo: {
-          // es el join en prisma
-          id_articulo: id,
+          id_articulo: +id,
         },
       },
     })
@@ -133,21 +132,40 @@ export const eliminarArticulo = async (req, res) => {
       })
     }
 
+    const articulo = await prisma.articulo.findUnique({
+      where: {
+        id_articulo: id,
+      },
+    })
+
+    if (!articulo) {
+      return res.status(404).json({ error: 'No se encontró el artículo' })
+    }
+
+    if (articulo.stock > 0) {
+      return res.status(400).json({
+        error:
+          'No se puede eliminar el artículo porque aún tiene stock disponible.',
+      })
+    }
+
     const articuloEliminado = await prisma.articulo.update({
       where: {
-        id_articulo: +id,
+        id_articulo: id,
       },
       data: {
         fechaBaja: new Date(),
       },
     })
+
     res.json(articuloEliminado)
   } catch (error) {
     console.error(error)
-    if (error.code === 'P2025')
+    if (error.code === 'P2025') {
       return res
         .status(404)
         .json({ error: 'No se encontró un artículo con ese id' })
+    }
 
     res.status(500).json({ error: 'Error al eliminar el artículo' })
   }
