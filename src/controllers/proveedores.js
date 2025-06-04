@@ -10,19 +10,62 @@ export const crearProveedor = async (req, res) => {
     return res.status(400).json({ error: result.error.issues })
   }
 
-  const { nombre, apellido, email, telefono } = result.data
+  const { nombre, apellido, email, telefono, articulos } = result.data
 
   try {
-    const nuevoProveedor = await prisma.proveedor.create({
-      data: {
-        nombre,
-        apellido,
-        email,
-        telefono,
-      },
+    const resultado = await prisma.$transaction(async (tx) => {
+      const nuevoProveedor = await prisma.proveedor.create({
+        data: {
+          nombre,
+          apellido,
+          email,
+          telefono,
+        },
+      })
+
+      // Asociar artículos al proveedor
+      if (articulos && articulos.length > 0) {
+        for (const articulo of articulos) {
+          const {
+            id_articulo,
+            precio_unitario,
+            demora_entrega,
+            costo_pedido,
+            costo_compra,
+            modelo_seleccionado,
+            es_predeterminado,
+          } = articulo
+
+          const nuevoProveedorArticulo = await prisma.proveedorArticulo.create({
+            data: {
+              id_proveedor: nuevoProveedor.id_proveedor,
+              id_articulo,
+              precio_unitario,
+              demora_entrega,
+              costo_pedido,
+              costo_compra,
+              modelo_seleccionado,
+              es_predeterminado,
+            },
+          })
+
+          // Crear el modelo de inventario si es predeterminado
+          if (es_predeterminado) {
+            await prisma.modeloInventario.create({
+              data: {
+                id_proveedor_articulo:
+                  nuevoProveedorArticulo.id_proveedor_articulo,
+              },
+            })
+          }
+
+          // Falta calcular el lote óptimo y punto de pedido de acuerdo al modelo de inventario seleccionado...
+        }
+      }
+      return nuevoProveedor
     })
 
-    res.status(201).json(nuevoProveedor)
+    res.status(201).json(resultado)
   } catch (error) {
     if (error.code === 'P2002') {
       return res.status(409).json({ error: 'El email ya está en uso.' })
