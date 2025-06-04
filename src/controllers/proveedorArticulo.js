@@ -11,7 +11,16 @@ export const crearProveedorArticulo = async (req, res) => {
     return res.status(400).json({ error: result.error.issues })
   }
 
-  const { id_proveedor, id_articulo, costo_pedido, costo_compra, precio_unitario, demora_entrega, cgi, modelo_seleccionado } = result.data
+  const {
+    id_proveedor,
+    id_articulo,
+    costo_pedido,
+    costo_compra,
+    precio_unitario,
+    demora_entrega,
+    cgi,
+    modelo_seleccionado,
+  } = result.data
 
   try {
     const nuevoProveedorArticulo = await prisma.proveedorArticulo.create({
@@ -29,59 +38,62 @@ export const crearProveedorArticulo = async (req, res) => {
 
     res.status(201).json(nuevoProveedorArticulo)
   } catch (error) {
-
-    
     if (error.code === 'P2002') {
-      return res.status(409).json({ error: 'El proveedor ya está asociado a ese artículo.' })
+      return res
+        .status(409)
+        .json({ error: 'El proveedor ya está asociado a ese artículo.' })
     }
 
     console.error(error)
     res.status(500).json({
       error: [{ message: 'Error al crear el proveedor-artículo' }],
     })
-    
   }
 }
 
-//Todos los proveedores por aritculo 
+//Todos los proveedores por aritculo
 export const obtenerProveedoresPorArticulo = async (req, res) => {
-  const idArticulo = req.params.id;
+  const idArticulo = req.params.id
 
   try {
     const resultados = await prisma.proveedorArticulo.findMany({
       where: { id_articulo: +idArticulo },
       include: {
         proveedor: true,
-        articulo: true
-      }
-    });
-
-    res.status(200).json(resultados);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      error: [{ message: 'Error al obtener proveedores por artículo' }],
-    });
-  }
-};
-
-//Todos los articulos por proveedor
-export const obtenrArticulosPorProveedor = async (req,res) =>{
-  const idProveedor = req.params.id;
-
-  try{
-    const data = await prisma.proveedorArticulo.findMany({
-      where: {id_proveedor: +idProveedor},
-      include:{
-        proveedor: true,
-        articulo: true
-      }
+        articulo: true,
+      },
     })
 
-    res.status(200).json(data);
+    res.status(200).json(resultados)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: [{ message: 'Error al obtener proveedores por artículo' }],
+    })
+  }
+}
 
-  } catch (error){
-    console.error(error);
-    res.status(500).json({error: [{ message: 'Error al obtener artículos por proveedor' }]});
+//Todos los articulos por proveedor
+export const obtenerArticulosPorProveedor = async (req, res) => {
+  const { id_proveedor } = req.query
+  if (!id_proveedor) {
+    return res.status(400).json({ error: 'Falta el id del proveedor' })
+  }
+
+  try {
+    const data = await prisma.proveedorArticulo.findMany({
+      where: { id_proveedor: +id_proveedor },
+      include: {
+        proveedor: true,
+        articulo: true,
+      },
+    })
+
+    res.status(200).json(data)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: [{ message: 'Error al obtener artículos por proveedor' }],
+    })
   }
 }
