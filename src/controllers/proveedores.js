@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { validateProveedor } from '../validators/proveedor.schema.js'
+import { estadosOC } from '../utils/constants.js'
 
 const prisma = new PrismaClient()
 
@@ -87,6 +88,65 @@ export const obtenerProveedores = async (req, res) => {
     console.error(error)
     res.status(500).json({
       error: [{ message: 'Error al obtener los proveedores' }],
+    })
+  }
+}
+
+export const eliminarProveedor = async (req, res) => {
+  const { id_proveedor } = req.query
+  if (!id_proveedor) {
+    return res.status(400).json({ error: 'Falta el id del proveedor' })
+  }
+
+  try {
+    const proveedor = await prisma.proveedor.findUnique({
+      where: { id_proveedor: +id_proveedor },
+    })
+
+    if (!proveedor) {
+      throw new Error('Proveedor no encontrado')
+    }
+
+    // Verificar que el proveedor no sea el predeterminado de al menos un artículo
+    const proveedorArticulo = await prisma.proveedorArticulo.findFirst({
+      where: {
+        id_proveedor: +id_proveedor,
+        es_predeterminado: true,
+      },
+    })
+    if (proveedorArticulo) {
+      throw new Error(
+        'No se puede eliminar el proveedor porque es el predeterminado de al menos un artículo.'
+      )
+    }
+
+    // // Verificar que el proveedor no tenga órdenes de compra pendientes
+    const ordenPendiente = await prisma.ordenCompra.findFirst({
+      where: {
+        id_estado_orden_compra: estadosOC.pendiente,
+        proveedorArticulo: {
+          id_proveedor: +id_proveedor,
+        },
+      },
+    })
+
+    if (ordenPendiente) {
+      throw new Error(
+        'No se puede eliminar el proveedor porque tiene órdenes de compra pendientes.'
+      )
+    }
+
+    // Marcar el proveedor como eliminado
+    await prisma.proveedor.update({
+      where: { id_proveedor: +id_proveedor },
+      data: { fechaBaja: new Date() },
+    })
+
+    res.status(200).json({ message: 'Proveedor eliminado correctamente' })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: { message: error.message || 'Error al eliminar el proveedor' },
     })
   }
 }

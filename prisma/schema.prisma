@@ -90,7 +90,6 @@ model ProveedorArticulo {
   cgi Float?
   modelo_seleccionado String
   es_predeterminado Boolean @default(false)
-  fechaBaja DateTime?
   id_articulo      Int
   articulo        Articulo @relation(fields: [id_articulo], references: [id_articulo], onDelete: Cascade)
   id_proveedor    Int
