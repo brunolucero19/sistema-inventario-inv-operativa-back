@@ -229,3 +229,36 @@ export const eliminarProveedorArticulo = async (req, res) => {
     })
   }
 }
+
+export const obtenerCGIPorArticulo = async (req, res) => {
+  const { idArticulo } = req.params
+  if (!idArticulo) {
+    return res.status(400).json({ error: 'Falta el id del articulo' })
+  }
+
+  try {
+    const data = await prisma.proveedorArticulo.findMany({
+      where: {
+        id_articulo: +idArticulo,
+        proveedor: {
+          fechaBaja: null,
+        },
+      },
+      select: {
+        cgi: true,
+        proveedor: {
+          select: {
+            nombre: true,
+          },
+        },
+      },
+    })
+
+    res.status(200).json(data)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: [{ message: 'Error al obtener CGI por articulo' }],
+    })
+  }
+}

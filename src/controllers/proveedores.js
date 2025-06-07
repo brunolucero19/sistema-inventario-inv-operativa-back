@@ -27,12 +27,22 @@ export const crearProveedor = async (req, res) => {
       // Asociar artículos al proveedor
       if (articulos && articulos.length > 0) {
         for (const articulo of articulos) {
+          const costoAlm = await prisma.articulo.findUnique({
+            where: {
+              id_articulo: articulo.id_articulo,
+            },
+            select: {
+              costo_almacenamiento: true,
+            },
+          })
+
+          console.log('costoAlm', costoAlm)
           const {
             id_articulo,
             precio_unitario,
             demora_entrega,
-            costo_pedido,
-            costo_compra,
+            costo_pedido, // Esto es (Demanda / Cantidad a pedir) * Costo de hacer un Pedido
+            costo_compra, // Esto es Demanda * Costo por Unidad
             modelo_seleccionado,
             es_predeterminado,
           } = articulo
@@ -47,6 +57,7 @@ export const crearProveedor = async (req, res) => {
               costo_compra,
               modelo_seleccionado,
               es_predeterminado,
+              cgi: costoAlm.costo_almacenamiento + costo_pedido + costo_compra,
             },
           })
 
