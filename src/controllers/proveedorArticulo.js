@@ -51,6 +51,25 @@ export const crearProveedorArticulo = async (req, res) => {
 
     // Falta calcular de acuerdo al modelo de inventario seleccionado
 
+    //Calculo de lote optimo si el modelo es de lote fijo
+    if (modelo_seleccionado === "lote_fijo") {
+
+      const D = nuevoProveedorArticulo.articulo.demanda_articulo
+      const S = nuevoProveedorArticulo.costo_pedido
+      const H = nuevoProveedorArticulo.articulo.costo_almacenamiento
+
+      const Q = Math.round(Math.sqrt((2 * D * S) / H))
+
+      await prisma.modeloInventario.update({
+        where: {
+          id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo
+        },
+
+        data: {
+          lote_optimo: Q
+        }
+      })
+    }
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
     if (es_predeterminado) {
       await prisma.proveedorArticulo.updateMany({
@@ -174,16 +193,35 @@ export const actualizarProveedorArticulo = async (req, res) => {
       },
     })
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
-    if (es_predeterminado) {
-      await prisma.proveedorArticulo.updateMany({
-        where: {
-          id_articulo: id_articulo,
-          es_predeterminado: true,
-          id_proveedor_articulo: {
-            not: proveedorArticuloExistente.id_proveedor_articulo,
-          },
+    await prisma.proveedorArticulo.updateMany({
+      where: {
+        id_articulo: id_articulo,
+        es_predeterminado: true,
+        id_proveedor_articulo: {
+          not: proveedorArticuloExistente.id_proveedor_articulo,
         },
-        data: { es_predeterminado: false },
+      },
+      data: { es_predeterminado: false },
+    })
+
+    //Calculo de lote optimo si el modelo es de lote fijo
+    if (modelo_seleccionado === "lote_fijo") {
+
+      const articulo = await prisma.articulo.findFirst({ where: { id_articulo: proveedorArticuloActualizado.id_articulo } })
+      const D = articulo.demanda_articulo
+      const S = proveedorArticuloActualizado.costo_pedido
+      const H = articulo.costo_almacenamiento
+
+      const Q = Math.round(Math.sqrt((2 * D * S) / H))
+
+      await prisma.modeloInventario.update({
+        where: {
+          id_proveedor_articulo: proveedorArticuloActualizado.id_proveedor_articulo
+        },
+
+        data: {
+          lote_optimo: Q
+        }
       })
     }
 

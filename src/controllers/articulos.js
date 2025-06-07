@@ -96,6 +96,38 @@ export const modificarArticulo = async (req, res) => {
 
       data: result.data,
     })
+
+    //Actualizo el lote_optimo por cada modelo relacionado a cada proveedorArticulo relacionado al articulo modificado
+    const proveedoresArticulos = await prisma.proveedorArticulo.findMany({
+      where: {
+        id_articulo: articuloActualizado.id_articulo,
+        modelo_seleccionado: "lote_fijo"
+      },
+      include: {
+        modeloInventario: true
+      }
+    })
+
+    for (const proveedorArticulo of proveedoresArticulos) {
+      const D = articuloActualizado.demanda_articulo
+      const S = proveedorArticulo.costo_pedido
+      const H = articuloActualizado.costo_almacenamiento
+
+      const Q = Math.round(Math.sqrt((2 * D * S) / H))
+
+      await prisma.modeloInventario.update({
+        where: {
+          id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo
+        },
+
+        data: {
+          lote_optimo: Q
+        }
+      })
+    }
+
+
+
     res.json(articuloActualizado)
   } catch (error) {
     console.error(error)
