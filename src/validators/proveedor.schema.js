@@ -17,9 +17,17 @@ export const proveedorSchema = z.object({
         .number()
         .int({ message: 'La demora de entrega debe ser un número entero' }),
       costo_pedido: z.number(),
-      costo_compra: z.number(),
       modelo_seleccionado: z.string(),
       es_predeterminado: z.boolean(),
+      periodo_revision: z
+        .number()
+        .int()
+        .nonnegative({
+          message:
+            'El periodo de revisión debe ser un número entero no negativo',
+        })
+        .optional()
+        .nullable(),
     })
   ),
 })

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { validateProveedorArticulo } from '../validators/proveedorArticulo.schema.js'
+import { calcularLoteOptimoPuntoPedido } from '../utils/calculos.js'
 
 const prisma = new PrismaClient()
 
@@ -20,6 +21,7 @@ export const crearProveedorArticulo = async (req, res) => {
     demora_entrega,
     modelo_seleccionado,
     es_predeterminado,
+    periodo_revision,
   } = result.data
 
   try {
@@ -40,36 +42,47 @@ export const crearProveedorArticulo = async (req, res) => {
         articulo: true,
       },
     })
-    // Si es predeterminado, crear el modelo de inventario
-    if (es_predeterminado) {
-      await prisma.modeloInventario.create({
-        data: {
-          id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo,
-        },
-      })
-    }
 
-    // Falta calcular de acuerdo al modelo de inventario seleccionado
+    const nuevoModeloInventario = await prisma.modeloInventario.create({
+      data: {
+        id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo,
+      },
+    })
 
     //Calculo de lote optimo si el modelo es de lote fijo
-    if (modelo_seleccionado === "lote_fijo") {
-
-      const D = nuevoProveedorArticulo.articulo.demanda_articulo
-      const S = nuevoProveedorArticulo.costo_pedido
-      const H = nuevoProveedorArticulo.articulo.costo_almacenamiento
-
-      const Q = Math.round(Math.sqrt((2 * D * S) / H))
+    if (modelo_seleccionado === 'lote_fijo') {
+      const { Q, R } = await calcularLoteOptimoPuntoPedido(
+        nuevoProveedorArticulo
+      )
 
       await prisma.modeloInventario.update({
         where: {
-          id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo
+          id_modelo_inventario: nuevoModeloInventario.id_modelo_inventario,
         },
-
         data: {
-          lote_optimo: Q
-        }
+          lote_optimo: Q,
+          punto_pedido: R,
+          periodo_revision: null, // No se usa en lote fijo
+          fecha_ultima_revision: null, // No se usa en lote fijo
+        },
       })
     }
+
+    // Para modelo de intervalo fijo
+    if (modelo_seleccionado === 'intervalo_fijo') {
+      await prisma.modeloInventario.update({
+        where: {
+          id_modelo_inventario: nuevoModeloInventario.id_modelo_inventario,
+        },
+        data: {
+          periodo_revision: periodo_revision,
+          fecha_ultima_revision: new Date(),
+          lote_optimo: null,
+          punto_pedido: null,
+        },
+      })
+    }
+
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
     if (es_predeterminado) {
       await prisma.proveedorArticulo.updateMany({
@@ -134,6 +147,7 @@ export const obtenerArticulosPorProveedor = async (req, res) => {
       include: {
         proveedor: true,
         articulo: true,
+        modeloInventario: true,
       },
     })
 
@@ -163,6 +177,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
     demora_entrega,
     es_predeterminado,
     modelo_seleccionado,
+    periodo_revision,
   } = result.data
 
   try {
@@ -205,23 +220,51 @@ export const actualizarProveedorArticulo = async (req, res) => {
     })
 
     //Calculo de lote optimo si el modelo es de lote fijo
-    if (modelo_seleccionado === "lote_fijo") {
-
-      const articulo = await prisma.articulo.findFirst({ where: { id_articulo: proveedorArticuloActualizado.id_articulo } })
-      const D = articulo.demanda_articulo
-      const S = proveedorArticuloActualizado.costo_pedido
-      const H = articulo.costo_almacenamiento
-
-      const Q = Math.round(Math.sqrt((2 * D * S) / H))
+    if (modelo_seleccionado === 'lote_fijo') {
+      const { Q, R } = await calcularLoteOptimoPuntoPedido(
+        proveedorArticuloActualizado
+      )
 
       await prisma.modeloInventario.update({
         where: {
-          id_proveedor_articulo: proveedorArticuloActualizado.id_proveedor_articulo
+          id_proveedor_articulo:
+            proveedorArticuloActualizado.id_proveedor_articulo,
         },
 
         data: {
-          lote_optimo: Q
-        }
+          lote_optimo: Q,
+          punto_pedido: R,
+          periodo_revision: null, // No se usa en lote fijo
+          fecha_ultima_revision: null, // No se usa en lote fijo
+        },
+      })
+    }
+
+    // Para modelo de intervalo fijo
+    if (modelo_seleccionado === 'intervalo_fijo') {
+      // Traer datos actuales del modelo inventario
+      const modeloInventarioActual = await prisma.modeloInventario.findUnique({
+        where: {
+          id_proveedor_articulo:
+            proveedorArticuloActualizado.id_proveedor_articulo,
+        },
+        select: {
+          fecha_ultima_revision: true,
+        },
+      })
+
+      await prisma.modeloInventario.update({
+        where: {
+          id_proveedor_articulo:
+            proveedorArticuloActualizado.id_proveedor_articulo,
+        },
+        data: {
+          periodo_revision: periodo_revision,
+          fecha_ultima_revision:
+            modeloInventarioActual.fecha_ultima_revision ?? new Date(),
+          lote_optimo: null,
+          punto_pedido: null,
+        },
       })
     }
 
@@ -250,6 +293,13 @@ export const eliminarProveedorArticulo = async (req, res) => {
     if (!proveedorArticulo) {
       return res.status(404).json({ error: 'Proveedor-artículo no encontrado' })
     }
+
+    // Eliminar el modelo de inventario asociado
+    await prisma.modeloInventario.delete({
+      where: {
+        id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo,
+      },
+    })
 
     await prisma.proveedorArticulo.delete({
       where: {
