@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import router from './src/routes/index.js'
 import morgan from 'morgan'
 import './config/db.js'
+import { iniciarCronIntervaloFijo } from './src/jobs/reponerInventarioJob.js'
 
 dotenv.config()
 
@@ -16,6 +17,12 @@ app.use(corsMiddleware)
 
 // Ruta raíz
 app.use('/api', router)
+
+const revisionHora = process.env.REVISION_HORA_CRON || '0 4 * * *';
+
+if (revisionHora) {
+  iniciarCronIntervaloFijo(revisionHora);
+}
 
 // Iniciar servidor
 app.listen(PORT, () => {

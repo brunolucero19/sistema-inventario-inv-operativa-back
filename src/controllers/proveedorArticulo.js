@@ -54,7 +54,7 @@ export const crearProveedorArticulo = async (req, res) => {
     });
 
     const stock_seguridad = calcularStockSeguridad(nivelServicioZ[nivel_servicio], desvEstDem.desviacion_est_dem);
-    console.log('hola', stock_seguridad);
+
     const nuevoModeloInventario = await prisma.modeloInventario.create({
       data: {
         id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo,
@@ -235,6 +235,15 @@ export const actualizarProveedorArticulo = async (req, res) => {
       data: { es_predeterminado: false },
     })
 
+    const desvEstDem = await prisma.articulo.findFirst({
+      where: { id_articulo: id_articulo },
+      select: {
+        desviacion_est_dem: true
+      }
+    });
+
+    const stock_seguridad = calcularStockSeguridad(nivelServicioZ[nivel_servicio], desvEstDem.desviacion_est_dem);
+
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
       const { Q, R } = await calcularLoteOptimoPuntoPedido(
@@ -250,6 +259,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
         data: {
           lote_optimo: Q,
           punto_pedido: R,
+          stock_seguridad,
           periodo_revision: null, // No se usa en lote fijo
           fecha_ultima_revision: null, // No se usa en lote fijo
         },
@@ -278,6 +288,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
           periodo_revision: periodo_revision,
           fecha_ultima_revision:
             modeloInventarioActual.fecha_ultima_revision ?? new Date(),
+          stock_seguridad,
           lote_optimo: null,
           punto_pedido: null,
         },
