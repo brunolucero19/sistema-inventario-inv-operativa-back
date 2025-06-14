@@ -34,3 +34,8 @@ export const calcularCGI = (
   const cgi = costo_almacenamiento + costo_pedido + costo_compra
   return cgi
 }
+
+export const calcularStockSeguridad = (z, desviacionEstDem) => {
+  const stock_seguridad = z * desviacionEstDem
+  return stock_seguridad
+}

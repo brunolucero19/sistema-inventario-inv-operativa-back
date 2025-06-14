@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { validateProveedorArticulo } from '../validators/proveedorArticulo.schema.js'
-import { calcularLoteOptimoPuntoPedido } from '../utils/calculos.js'
+import { calcularLoteOptimoPuntoPedido, calcularStockSeguridad } from '../utils/calculos.js'
+import { nivelServicioZ } from '../utils/constants.js'
 
 const prisma = new PrismaClient()
 
@@ -19,6 +20,7 @@ export const crearProveedorArticulo = async (req, res) => {
     costo_compra,
     precio_unitario,
     demora_entrega,
+    nivel_servicio,
     modelo_seleccionado,
     es_predeterminado,
     periodo_revision,
@@ -34,6 +36,7 @@ export const crearProveedorArticulo = async (req, res) => {
         costo_compra,
         precio_unitario,
         demora_entrega,
+        nivel_servicio,
         modelo_seleccionado,
         es_predeterminado,
       },
@@ -43,9 +46,19 @@ export const crearProveedorArticulo = async (req, res) => {
       },
     })
 
+    const desvEstDem = await prisma.articulo.findFirst({
+      where: { id_articulo: id_articulo },
+      select: {
+        desviacion_est_dem: true
+      }
+    });
+
+    const stock_seguridad = calcularStockSeguridad(nivelServicioZ[nivel_servicio], desvEstDem.desviacion_est_dem);
+    console.log('hola', stock_seguridad);
     const nuevoModeloInventario = await prisma.modeloInventario.create({
       data: {
         id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo,
+        stock_seguridad
       },
     })
 
@@ -99,6 +112,7 @@ export const crearProveedorArticulo = async (req, res) => {
 
     res.status(201).json(nuevoProveedorArticulo)
   } catch (error) {
+    console.log(error.message)
     if (error.code === 'P2002') {
       return res
         .status(409)
@@ -175,6 +189,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
     costo_compra,
     precio_unitario,
     demora_entrega,
+    nivel_servicio,
     es_predeterminado,
     modelo_seleccionado,
     periodo_revision,
@@ -203,6 +218,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
         costo_compra,
         precio_unitario,
         demora_entrega,
+        nivel_servicio,
         modelo_seleccionado,
         es_predeterminado,
       },
