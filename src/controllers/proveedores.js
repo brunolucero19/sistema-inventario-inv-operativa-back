@@ -1,6 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 import { validateProveedor } from '../validators/proveedor.schema.js'
 import { estadosOC } from '../utils/constants.js'
+import {
+  calcularCGI,
+  calcularCostoCompra,
+  calcularLoteOptimoPuntoPedido,
+} from '../utils/calculos.js'
 
 const prisma = new PrismaClient()
 
@@ -27,25 +32,32 @@ export const crearProveedor = async (req, res) => {
       // Asociar artículos al proveedor
       if (articulos && articulos.length > 0) {
         for (const articulo of articulos) {
-          const costoAlm = await prisma.articulo.findUnique({
+          const art = await prisma.articulo.findUnique({
             where: {
               id_articulo: articulo.id_articulo,
             },
-            select: {
-              costo_almacenamiento: true,
-            },
           })
 
-          console.log('costoAlm', costoAlm)
           const {
             id_articulo,
             precio_unitario,
             demora_entrega,
             costo_pedido, // Esto es (Demanda / Cantidad a pedir) * Costo de hacer un Pedido
-            costo_compra, // Esto es Demanda * Costo por Unidad
             modelo_seleccionado,
             es_predeterminado,
+            periodo_revision,
           } = articulo
+
+          const costo_compra = calcularCostoCompra(
+            precio_unitario,
+            art.demanda_articulo
+          )
+
+          const cgi = calcularCGI(
+            art.costo_almacenamiento,
+            costo_pedido,
+            costo_compra
+          )
 
           const nuevoProveedorArticulo = await prisma.proveedorArticulo.create({
             data: {
@@ -57,21 +69,53 @@ export const crearProveedor = async (req, res) => {
               costo_compra,
               modelo_seleccionado,
               es_predeterminado,
-              cgi: costoAlm.costo_almacenamiento + costo_pedido + costo_compra,
+              cgi,
             },
           })
 
-          // Crear el modelo de inventario si es predeterminado
-          if (es_predeterminado) {
-            await prisma.modeloInventario.create({
+          const modeloInventarioNuevo = await prisma.modeloInventario.create({
+            data: {
+              id_proveedor_articulo:
+                nuevoProveedorArticulo.id_proveedor_articulo,
+            },
+          })
+
+          //Calculo de lote optimo si el modelo es de lote fijo
+          if (modelo_seleccionado === 'lote_fijo') {
+            const { Q, R } = await calcularLoteOptimoPuntoPedido(
+              nuevoProveedorArticulo
+            )
+
+            await prisma.modeloInventario.update({
+              where: {
+                id_modelo_inventario:
+                  modeloInventarioNuevo.id_modelo_inventario,
+              },
+
               data: {
-                id_proveedor_articulo:
-                  nuevoProveedorArticulo.id_proveedor_articulo,
+                lote_optimo: Q,
+                punto_pedido: R,
+                periodo_revision: null, // No se usa en lote fijo
+                fecha_ultima_revision: null, // No se usa en lote fijo
               },
             })
           }
 
-          // Falta calcular el lote óptimo y punto de pedido de acuerdo al modelo de inventario seleccionado...
+          // Para modelo de intervalo fijo
+          if (modelo_seleccionado === 'intervalo_fijo') {
+            await prisma.modeloInventario.update({
+              where: {
+                id_modelo_inventario:
+                  modeloInventarioNuevo.id_modelo_inventario,
+              },
+              data: {
+                periodo_revision: periodo_revision,
+                fecha_ultima_revision: new Date(),
+                lote_optimo: null,
+                punto_pedido: null,
+              },
+            })
+          }
         }
       }
       return nuevoProveedor

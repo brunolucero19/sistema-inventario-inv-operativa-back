@@ -105,8 +105,14 @@ model ProveedorArticulo {
 
 model ModeloInventario {
   id_modelo_inventario Int      @id @default(autoincrement())
+
+  //Modelo Lote Fijo
   lote_optimo  Int?
   punto_pedido Int?
+
+  //Modelo Intervalo Fijo
+  periodo_revision Int?
+  fecha_ultima_revision DateTime?
 
   id_proveedor_articulo Int @unique
   proveedorArticulo ProveedorArticulo @relation(fields: [id_proveedor_articulo], references: [id_proveedor_articulo])
