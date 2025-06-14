@@ -14,18 +14,47 @@ export const crearOrdenCompra = async (req, res) => {
   const {
     id_proveedor_articulo,
     cantidad,
-    fechaEntrega,
   } = result.data
 
   try {
+
+    const proveedorArticulo = await prisma.proveedorArticulo.findUnique({
+      where: { id_proveedor_articulo: id_proveedor_articulo },
+    })
+
+    if( !proveedorArticulo) {
+      return res.status(404).json({ error: 'ProveedorArticulo no encontrado' })
+    }
+    const fechaEntrega = new Date(Date.now() + proveedorArticulo.demora_entrega * 24 * 60 * 60 * 1000)
+
+    const monto_total = proveedorArticulo.precio_unitario * cantidad
     const nuevaOrdenCompra = await prisma.ordenCompra.create({
       data: {
         cantidad,
-        monto_total: 0,
-        fecha_estimada_recepcion: new Date(fechaEntrega),
+        monto_total,
+        fecha_estimada_recepcion: fechaEntrega,
         id_proveedor_articulo,
         id_estado_orden_compra: 1, //Se me crea con estado pendiente por defecto 
       },
+      include:{
+        estadoOrdenCompra: true,
+        proveedorArticulo:{
+          include: {
+            proveedor: {
+              select: {
+                id_proveedor: true,
+                nombre: true,
+              }
+            },
+            articulo: {
+              select: {
+                id_articulo: true,
+                descripcion: true
+              }
+            },
+          }
+        }
+      }
     })
 
     res.status(201).json(nuevaOrdenCompra)
@@ -40,7 +69,22 @@ export const obtenerOrdenesCompra = async (req, res) => {
   try {
     const ordenesCompra = await prisma.ordenCompra.findMany({
       include: {
-        proveedorArticulo: true,
+        proveedorArticulo: {
+          include: {
+            proveedor: {
+              select: {
+                id_proveedor: true,
+                nombre: true,
+              },
+            },
+            articulo: {
+              select: {
+                id_articulo: true,
+                descripcion: true,
+              },
+            },
+          },
+        },
         estadoOrdenCompra: true,
       },
     })

@@ -7,11 +7,7 @@ export const ordenCompraSchema = z.object({
 
   cantidad: z.number({ invalid_type_error: 'Debe ser un número' })
     .int()
-    .positive({ message: 'La cantidad debe ser mayor a 0' }),
-
-  fechaEntrega: z.string().refine(val => !isNaN(Date.parse(val)), {
-    message: 'Fecha de entrega inválida',
-  })
+    .positive({ message: 'La cantidad debe ser mayor a 0' })
 })
 
 export function validateOrdenCompra(data) {
