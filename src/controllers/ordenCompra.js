@@ -149,7 +149,9 @@ export const actualizarOrdenCompra = async (req, res) => {
     }
 
     if (ordenCompra.estadoOrdenCompra.id_estado_orden_compra === estadosOC.enviada) {
-      const esEstadoValido = estadoId ? estadoId === estadosOC.finalizada : false;
+      const { enviada, finalizada } = estadosOC;
+
+      const esEstadoValido = estadoId ? [enviada, finalizada].includes(+estadoId) : false;
       if (!esEstadoValido) {
         return res.status(400).json({ error: 'No se puede actualizar una orden de compra enviada a un estado diferente a finalizada' });
       }
@@ -203,9 +205,9 @@ export const actualizarOrdenCompra = async (req, res) => {
       const precioUnitario = ordenCompra.proveedorArticulo.precio_unitario;
       const nuevoMontoTotal = cantidad ? precioUnitario * cantidad : ordenCompra.monto_total;
 
-      const { cancelada, enviada } = estadosOC
+      const { cancelada, enviada, pendiente } = estadosOC
 
-      const esEstadoValido = estadoId ? [cancelada, enviada].includes(+estadoId) : false; // Verifica si el estado es válido
+      const esEstadoValido = estadoId ? [cancelada, enviada, pendiente].includes(+estadoId) : false; // Verifica si el estado es válido
 
       if (estadoId && !esEstadoValido) {
         return res.status(400).json({ error: 'Estado inválido para una orden de compra pendiente' });
