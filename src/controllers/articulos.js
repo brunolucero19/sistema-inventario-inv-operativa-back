@@ -14,10 +14,10 @@ export const crearArticulo = async (req, res) => {
   const {
     descripcion,
     demanda_articulo,
+    desviacion_est_dem,
     costo_almacenamiento,
     stock,
     precioVenta,
-    stock_seguridad,
     inventario_maximo,
   } = result.data
 
@@ -26,17 +26,17 @@ export const crearArticulo = async (req, res) => {
       data: {
         descripcion,
         demanda_articulo,
+        desviacion_est_dem,
         costo_almacenamiento,
         stock,
         precioVenta,
-        stock_seguridad,
         inventario_maximo,
       },
     })
 
     res.status(201).json(nuevoArticulo)
   } catch (error) {
-    console.error(error)
+    console.log(error)
     res.status(500).json({
       error: [{ message: 'Error al crear el artículo' }],
     })

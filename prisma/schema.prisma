@@ -24,10 +24,10 @@ model Articulo {
   id_articulo          Int            @id @default(autoincrement())
   descripcion          String
   demanda_articulo     Int
+  desviacion_est_dem   Float @default(0.0)
   costo_almacenamiento Float
   stock                Int
   precioVenta          Float
-  stock_seguridad      Int
   inventario_maximo    Int
   fechaBaja            DateTime?
   detallesVenta        DetalleVenta[]
@@ -88,6 +88,7 @@ model ProveedorArticulo {
   precio_unitario Float
   demora_entrega Int
   cgi Float?
+  nivel_servicio Int @default(95)
   modelo_seleccionado String
   es_predeterminado Boolean @default(false)
   id_articulo      Int
@@ -105,6 +106,7 @@ model ProveedorArticulo {
 
 model ModeloInventario {
   id_modelo_inventario Int      @id @default(autoincrement())
+  stock_seguridad Int @default(0)
 
   //Modelo Lote Fijo
   lote_optimo  Int?
