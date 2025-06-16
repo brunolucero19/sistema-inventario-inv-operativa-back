@@ -20,6 +20,7 @@ export const proveedorArticuloSchema = z.object({
     message: 'La demora de entrega debe ser un número entero no negativo',
   }),
   cgi: z.number().optional(),
+  nivel_servicio: z.number().nonnegative({ message: 'El costo compra debe ser un número no negativo' }),
   modelo_seleccionado: z.string(),
   es_predeterminado: z.boolean(),
   periodo_revision: z

@@ -34,3 +34,14 @@ export const calcularCGI = (
   const cgi = costo_almacenamiento + costo_pedido + costo_compra
   return cgi
 }
+
+export const calcularStockSeguridad = (z, desviacionEstDem) => {
+  const stock_seguridad = z * desviacionEstDem
+  return stock_seguridad
+}
+
+export const calcularStockAReponer = (d, T, L, z, desv_dem, I) => {
+  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2));
+  const q = d * (T + L) + (z * desv_rev_entrega) - I
+  return q
+}
