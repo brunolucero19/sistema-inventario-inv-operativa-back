@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { validateProveedorArticulo } from '../validators/proveedorArticulo.schema.js'
-import { calcularLoteOptimoPuntoPedido, calcularStockSeguridad } from '../utils/calculos.js'
+import { calcularLoteOptimoPuntoPedido, calcularStockSeguridadLF, calcularStockSeguridadIF } from '../utils/calculos.js'
 import { nivelServicioZ } from '../utils/constants.js'
 
 const prisma = new PrismaClient()
@@ -46,19 +46,9 @@ export const crearProveedorArticulo = async (req, res) => {
       },
     })
 
-    const desvEstDem = await prisma.articulo.findFirst({
-      where: { id_articulo: id_articulo },
-      select: {
-        desviacion_est_dem: true
-      }
-    });
-
-    const stock_seguridad = calcularStockSeguridad(nivelServicioZ[nivel_servicio], desvEstDem.desviacion_est_dem);
-
     const nuevoModeloInventario = await prisma.modeloInventario.create({
       data: {
         id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo,
-        stock_seguridad
       },
     })
 
@@ -67,6 +57,8 @@ export const crearProveedorArticulo = async (req, res) => {
       const { Q, R } = await calcularLoteOptimoPuntoPedido(
         nuevoProveedorArticulo
       )
+
+      const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], nuevoProveedorArticulo.articulo.desviacion_est_dem);
 
       await prisma.modeloInventario.update({
         where: {
@@ -77,12 +69,16 @@ export const crearProveedorArticulo = async (req, res) => {
           punto_pedido: R,
           periodo_revision: null, // No se usa en lote fijo
           fecha_ultima_revision: null, // No se usa en lote fijo
+          stock_seguridad: stock_seguridad
         },
       })
     }
 
     // Para modelo de intervalo fijo
     if (modelo_seleccionado === 'intervalo_fijo') {
+
+      const stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], nuevoProveedorArticulo.articulo.desviacion_est_dem);
+
       await prisma.modeloInventario.update({
         where: {
           id_modelo_inventario: nuevoModeloInventario.id_modelo_inventario,
@@ -92,6 +88,7 @@ export const crearProveedorArticulo = async (req, res) => {
           fecha_ultima_revision: new Date(),
           lote_optimo: null,
           punto_pedido: null,
+          stock_seguridad: stock_seguridad
         },
       })
     }

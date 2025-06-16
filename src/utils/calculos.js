@@ -35,9 +35,15 @@ export const calcularCGI = (
   return cgi
 }
 
-export const calcularStockSeguridad = (z, desviacionEstDem) => {
+export const calcularStockSeguridadLF = (z, desviacionEstDem) => {
   const stock_seguridad = z * desviacionEstDem
   return stock_seguridad
+}
+
+export const calcularStockSeguridadIF = (T, L, z, desv_dem) => {
+  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2));
+  const stock_seguridad = z * desv_rev_entrega
+  return stock_seguridad;
 }
 
 export const calcularStockAReponer = (d, T, L, z, desv_dem, I) => {
