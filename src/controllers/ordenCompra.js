@@ -76,6 +76,7 @@ export const obtenerOrdenesCompra = async (req, res) => {
               select: {
                 id_proveedor: true,
                 nombre: true,
+                apellido: true,
               },
             },
             articulo: {
