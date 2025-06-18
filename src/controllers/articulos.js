@@ -101,11 +101,11 @@ export const modificarArticulo = async (req, res) => {
     const proveedoresArticulos = await prisma.proveedorArticulo.findMany({
       where: {
         id_articulo: articuloActualizado.id_articulo,
-        modelo_seleccionado: "lote_fijo"
+        modelo_seleccionado: 'lote_fijo',
       },
       include: {
-        modeloInventario: true
-      }
+        modeloInventario: true,
+      },
     })
 
     for (const proveedorArticulo of proveedoresArticulos) {
@@ -117,16 +117,14 @@ export const modificarArticulo = async (req, res) => {
 
       await prisma.modeloInventario.update({
         where: {
-          id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo
+          id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo,
         },
 
         data: {
-          lote_optimo: Q
-        }
+          lote_optimo: Q,
+        },
       })
     }
-
-
 
     res.json(articuloActualizado)
   } catch (error) {
@@ -148,7 +146,17 @@ export const eliminarArticulo = async (req, res) => {
   }
 
   try {
-    const ordenPendiente = await prisma.ordenCompra.findFirst({
+    const articulo = await prisma.articulo.findUnique({
+      where: {
+        id_articulo: id,
+      },
+    })
+
+    if (!articulo) {
+      return res.status(404).json({ error: 'No se encontró el artículo' })
+    }
+
+    const ordenPendienteOEnviada = await prisma.ordenCompra.findFirst({
       where: {
         or: [
           { id_estado_orden_compra: estadosOC.pendiente },
@@ -163,18 +171,8 @@ export const eliminarArticulo = async (req, res) => {
     if (ordenPendiente) {
       return res.status(400).json({
         error:
-          'No se puede eliminar el artículo porque está en una orden de compra pendiente.',
+          'No se puede eliminar el artículo porque está en una orden de compra pendiente o enviada.',
       })
-    }
-
-    const articulo = await prisma.articulo.findUnique({
-      where: {
-        id_articulo: id,
-      },
-    })
-
-    if (!articulo) {
-      return res.status(404).json({ error: 'No se encontró el artículo' })
     }
 
     if (articulo.stock > 0) {
