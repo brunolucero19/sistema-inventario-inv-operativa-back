@@ -122,6 +122,32 @@ export const obtenerOrdenCompra = async (req, res) => {
   }
 }
 
+export const obtenerOrdenCompraActivaPorArticulo = async (req, res) => {
+  const { id_articulo } = req.params
+
+  try {
+    const ordenesCompra = await prisma.ordenCompra.findMany({
+      where: {
+        proveedorArticulo: {
+          id_articulo: +id_articulo
+        },
+        id_estado_orden_compra: {
+          in: [estadosOC.pendiente, estadosOC.enviada]
+        }
+      },
+      include: {
+        proveedorArticulo: true,
+        estadoOrdenCompra: true,
+      },
+    })
+
+    res.status(200).json(ordenesCompra)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: error.message })
+  }
+}
+
 // PATCH
 export const actualizarOrdenCompra = async (req, res) => {
   const { id } = req.params;
