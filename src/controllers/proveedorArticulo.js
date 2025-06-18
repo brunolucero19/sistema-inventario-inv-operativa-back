@@ -133,6 +133,11 @@ export const obtenerProveedoresPorArticulo = async (req, res) => {
       include: {
         proveedor: true,
         articulo: true,
+        modeloInventario: {
+          select: {
+            lote_optimo: true,
+          }
+        },
       },
     })
 
