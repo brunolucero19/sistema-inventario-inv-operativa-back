@@ -7,7 +7,6 @@ export const articuloSchema = z.object({
   costo_almacenamiento: z.number({ invalid_type_error: 'Debe ser un número' }).nonnegative({ message: 'No puede ser negativo' }),
   stock: z.number({ invalid_type_error: 'Debe ser un número' }).int().nonnegative({ message: 'No puede ser negativo' }),
   precioVenta: z.number({ invalid_type_error: 'Debe ser un número' }).nonnegative({ message: 'No puede ser negativo' }),
-  inventario_maximo: z.number({ invalid_type_error: 'Debe ser un número' }).int().nonnegative({ message: 'No puede ser negativo' }),
 })
 
 export function validateArticulo(object) {

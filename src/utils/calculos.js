@@ -51,3 +51,9 @@ export const calcularStockAReponer = (d, T, L, z, desv_dem, I) => {
   const q = d * (T + L) + (z * desv_rev_entrega) - I
   return q
 }
+
+export const calcularInventarioMaximo = (d, T, L, z, desv_dem) => {
+  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2));
+  const inv_max = d * (T + L) + (z * desv_rev_entrega)
+  return inv_max
+}

@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { validateProveedorArticulo } from '../validators/proveedorArticulo.schema.js'
-import { calcularLoteOptimoPuntoPedido, calcularStockSeguridadLF, calcularStockSeguridadIF } from '../utils/calculos.js'
+import { calcularLoteOptimoPuntoPedido, calcularStockSeguridadLF, calcularStockSeguridadIF, calcularInventarioMaximo } from '../utils/calculos.js'
 import { nivelServicioZ } from '../utils/constants.js'
 
 const prisma = new PrismaClient()
@@ -76,8 +76,12 @@ export const crearProveedorArticulo = async (req, res) => {
 
     // Para modelo de intervalo fijo
     if (modelo_seleccionado === 'intervalo_fijo') {
+      const desviacion_estandar = nuevoProveedorArticulo.articulo.desviacion_est_dem
+      const stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
+      
+      const demanda_diaria = nuevoProveedorArticulo.articulo.demanda_articulo / 365;
 
-      const stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], nuevoProveedorArticulo.articulo.desviacion_est_dem);
+      const inventario_maximo = calcularInventarioMaximo(demanda_diaria, periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
 
       await prisma.modeloInventario.update({
         where: {
@@ -88,7 +92,8 @@ export const crearProveedorArticulo = async (req, res) => {
           fecha_ultima_revision: new Date(),
           lote_optimo: null,
           punto_pedido: null,
-          stock_seguridad: stock_seguridad
+          stock_seguridad: stock_seguridad,
+          inventario_maximo: inventario_maximo
         },
       })
     }
@@ -224,6 +229,9 @@ export const actualizarProveedorArticulo = async (req, res) => {
         modelo_seleccionado,
         es_predeterminado,
       },
+      include: {
+        articulo: true
+      }
     })
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
     await prisma.proveedorArticulo.updateMany({
@@ -244,10 +252,11 @@ export const actualizarProveedorArticulo = async (req, res) => {
       }
     });
 
-    const stock_seguridad = calcularStockSeguridad(nivelServicioZ[nivel_servicio], desvEstDem.desviacion_est_dem);
 
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
+      const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], desvEstDem.desviacion_est_dem);
+
       const { Q, R } = await calcularLoteOptimoPuntoPedido(
         proveedorArticuloActualizado
       )
@@ -270,6 +279,12 @@ export const actualizarProveedorArticulo = async (req, res) => {
 
     // Para modelo de intervalo fijo
     if (modelo_seleccionado === 'intervalo_fijo') {
+      const desviacion_estandar = proveedorArticuloActualizado.articulo.desviacion_est_dem;
+      const stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
+
+      const demanda_diaria = proveedorArticuloActualizado.articulo.demanda_articulo / 365;
+      const inventario_maximo = calcularInventarioMaximo(demanda_diaria, periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
+
       // Traer datos actuales del modelo inventario
       const modeloInventarioActual = await prisma.modeloInventario.findUnique({
         where: {
@@ -290,7 +305,8 @@ export const actualizarProveedorArticulo = async (req, res) => {
           periodo_revision: periodo_revision,
           fecha_ultima_revision:
             modeloInventarioActual.fecha_ultima_revision ?? new Date(),
-          stock_seguridad,
+          stock_seguridad: stock_seguridad,
+          inventario_maximo: inventario_maximo,      
           lote_optimo: null,
           punto_pedido: null,
         },

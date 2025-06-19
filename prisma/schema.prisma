@@ -28,7 +28,6 @@ model Articulo {
   costo_almacenamiento Float
   stock                Int
   precioVenta          Float
-  inventario_maximo    Int
   fechaBaja            DateTime?
   detallesVenta        DetalleVenta[]
   proveedoresArticulo  ProveedorArticulo[]
@@ -115,6 +114,7 @@ model ModeloInventario {
   //Modelo Intervalo Fijo
   periodo_revision Int?
   fecha_ultima_revision DateTime?
+  inventario_maximo Int @default(0)
 
   id_proveedor_articulo Int @unique
   proveedorArticulo ProveedorArticulo @relation(fields: [id_proveedor_articulo], references: [id_proveedor_articulo])

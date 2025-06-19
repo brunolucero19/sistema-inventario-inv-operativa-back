@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { validateArticulo } from '../validators/articulo.schema.js'
-import { estadosOC } from '../utils/constants.js'
+import { estadosOC, nivelServicioZ } from '../utils/constants.js'
+import { calcularInventarioMaximo, calcularStockSeguridadIF, calcularStockSeguridadLF } from '../utils/calculos.js'
 
 const prisma = new PrismaClient()
 
@@ -17,8 +18,7 @@ export const crearArticulo = async (req, res) => {
     desviacion_est_dem,
     costo_almacenamiento,
     stock,
-    precioVenta,
-    inventario_maximo,
+    precioVenta
   } = result.data
 
   try {
@@ -29,8 +29,7 @@ export const crearArticulo = async (req, res) => {
         desviacion_est_dem,
         costo_almacenamiento,
         stock,
-        precioVenta,
-        inventario_maximo,
+        precioVenta
       },
     })
 
@@ -115,6 +114,12 @@ export const modificarArticulo = async (req, res) => {
       })
 
       for (const proveedorArticulo of proveedoresArticulos) {
+        
+        const desviacion_estandar = articuloActualizado.desviacion_est_dem;
+        const nivel_servicio = proveedorArticulo.nivel_servicio;
+
+        const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], desviacion_estandar);
+
         const D = articuloActualizado.demanda_articulo
         const S = proveedorArticulo.costo_pedido
         const H = articuloActualizado.costo_almacenamiento
@@ -125,9 +130,45 @@ export const modificarArticulo = async (req, res) => {
           where: {
             id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo,
           },
-
           data: {
             lote_optimo: Q,
+            stock_seguridad: stock_seguridad
+          },
+        })
+      }
+    }
+
+    if (articuloOriginal.demanda_articulo !== articuloActualizado.demanda_articulo ||
+      articuloOriginal.desviacion_est_dem !== articuloActualizado.desviacion_est_dem) {
+      const proveedoresArticulos = await prisma.proveedorArticulo.findMany({
+        where: {
+          id_articulo: articuloActualizado.id_articulo,
+          modelo_seleccionado: 'intervalo_fijo',
+        },
+        include: {
+          modeloInventario: true,
+        },
+      })
+
+      for (const proveedorArticulo of proveedoresArticulos) {
+        
+        const desviacion_estandar = articuloActualizado.desviacion_est_dem
+        const periodo_revision = proveedorArticulo.modeloInventario.periodo_revision
+        const demora_entrega = proveedorArticulo.demora_entrega
+        const nivel_servicio = proveedorArticulo.nivel_servicio
+        const demanda_diaria = articuloActualizado.demanda_articulo / 365;
+
+        const stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
+
+        const inventario_maximo = calcularInventarioMaximo(demanda_diaria, periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
+
+        await prisma.modeloInventario.update({
+          where: {
+            id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo,
+          },
+          data: {
+            stock_seguridad: stock_seguridad,
+            inventario_maximo: inventario_maximo
           },
         })
       }
