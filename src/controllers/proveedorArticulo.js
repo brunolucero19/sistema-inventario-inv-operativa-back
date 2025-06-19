@@ -17,7 +17,6 @@ export const crearProveedorArticulo = async (req, res) => {
     id_proveedor,
     id_articulo,
     costo_pedido,
-    costo_compra,
     precio_unitario,
     demora_entrega,
     nivel_servicio,
@@ -28,6 +27,12 @@ export const crearProveedorArticulo = async (req, res) => {
 
   try {
     // Crear relación proveedor-artículo
+    const articulo = await prisma.articulo.findUnique({
+      where: { id_articulo },
+    })
+
+    const costo_compra = articulo.demanda_articulo * precio_unitario
+
     const nuevoProveedorArticulo = await prisma.proveedorArticulo.create({
       data: {
         id_proveedor,
@@ -186,6 +191,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
   const result = validateProveedorArticulo(req.body)
 
   if (result.error) {
+    console.log(result.error.issues)
     return res.status(400).json({ error: result.error.issues })
   }
 
@@ -193,7 +199,6 @@ export const actualizarProveedorArticulo = async (req, res) => {
     id_proveedor,
     id_articulo,
     costo_pedido,
-    costo_compra,
     precio_unitario,
     demora_entrega,
     nivel_servicio,
@@ -218,7 +223,31 @@ export const actualizarProveedorArticulo = async (req, res) => {
     if (!proveedorArticuloExistente) {
       throw new Error('El proveedor-artículo no existe o no está asociado.')
     }
+
+
+    // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
+
+    if (!es_predeterminado && proveedorArticuloExistente.es_predeterminado) {
+      return res.status(400).json({
+        error: 'No se puede desmarcar a éste proveedor como el predeterminado. Primero debe asignarle otro proveedor como predeterminado.',
+      })
+    }
+
+    if (es_predeterminado) {
+      await prisma.proveedorArticulo.updateMany({
+        where: {
+          id_articulo: id_articulo,
+          es_predeterminado: true,
+          id_proveedor_articulo: {
+            not: proveedorArticuloExistente.id_proveedor_articulo,
+          },
+        },
+        data: { es_predeterminado: false },
+      })
+    }
+
     // Actualizar el proveedor-artículo
+    const costo_compra = proveedorArticuloExistente.articulo.demanda_articulo * precio_unitario;
     const proveedorArticuloActualizado = await prisma.proveedorArticulo.update({
       where: {
         id_proveedor_articulo: proveedorArticuloExistente.id_proveedor_articulo,
@@ -296,6 +325,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
       }
 
       // Traer datos actuales del modelo inventario
+      const stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desvEstDem.desviacion_est_dem);
       const modeloInventarioActual = await prisma.modeloInventario.findUnique({
         where: {
           id_proveedor_articulo:
@@ -348,7 +378,23 @@ export const eliminarProveedorArticulo = async (req, res) => {
       return res.status(404).json({ error: 'Proveedor-artículo no encontrado' })
     }
 
+    const proveedorArticulosCount = await prisma.proveedorArticulo.count({
+      where: {
+        id_proveedor: +id_proveedor,
+      },
+    })
+
+    if (proveedorArticulosCount <= 1) {
+      return res.status(400).json({
+        error: 'No se puede eliminar la última relación asociada a este proveedor.'
+      })
+    }
     // Eliminar el modelo de inventario asociado
+    if (proveedorArticulo.es_predeterminado) {
+      return res.status(400).json({
+        error: 'No se puede eliminar un Proveedor-artículo predeterminado. Debe cambiar el proveedor predeterminado antes de eliminar este registro.',
+      })
+    }
     await prisma.modeloInventario.delete({
       where: {
         id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo,
