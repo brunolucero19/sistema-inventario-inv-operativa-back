@@ -1,41 +1,61 @@
-import { PrismaClient } from '@prisma/client'
-import { validateOrdenCompra } from '../validators/ordenCompra.schema.js'
-import { estadosOC } from '../utils/constants.js'
+import { PrismaClient } from "@prisma/client";
+import { validateOrdenCompra } from "../validators/ordenCompra.schema.js";
+import { estadosOC } from "../utils/constants.js";
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
 
 // POST
 export const crearOrdenCompra = async (req, res) => {
-  const result = validateOrdenCompra(req.body)
+  const result = validateOrdenCompra(req.body);
 
   if (!result.success) {
-    return res.status(400).json({ error: result.error.issues })
+    return res.status(400).json({ error: result.error.issues });
   }
 
-  const {
-    id_proveedor_articulo,
-    cantidad,
-  } = result.data
+  const { id_proveedor_articulo, cantidad } = result.data;
 
   try {
-
     const proveedorArticulo = await prisma.proveedorArticulo.findUnique({
-      where: { id_proveedor_articulo: id_proveedor_articulo },
-    })
+      where: { id_proveedor_articulo },
+      include: {
+        articulo: true,
+      },
+    });
 
     if (!proveedorArticulo) {
-      return res.status(404).json({ error: 'ProveedorArticulo no encontrado' })
+      return res.status(404).json({ error: "ProveedorArticulo no encontrado" });
     }
-    const fechaEntrega = new Date(Date.now() + proveedorArticulo.demora_entrega * 24 * 60 * 60 * 1000)
 
-    const monto_total = proveedorArticulo.precio_unitario * cantidad
+    const modeloInventario = await prisma.modeloInventario.findUnique({
+      where: { id_proveedor_articulo },
+    });
+
+    if (!modeloInventario) {
+      return res.status(404).json({
+        error: "ModeloInventario no encontrado para este proveedorArticulo",
+      });
+    }
+
+    let advertencia = null;
+    const stockActual = proveedorArticulo.articulo.stock;
+
+    const totalsum = cantidad + stockActual;
+    if (totalsum < modeloInventario.punto_pedido) {
+      advertencia = `La suma de la cantidad solicitada sumado al stock actual (${totalsum}) es menor al punto de pedido (${modeloInventario.punto_pedido}).`;
+    } //Preguntar si no me deberia generar una OC o solo tiro advertencia. --> Poruqe tranquilamente podria pedir una parte y despues otra.
+
+    const fechaEntrega = new Date(
+      Date.now() + proveedorArticulo.demora_entrega * 24 * 60 * 60 * 1000
+    );
+
+    const monto_total = proveedorArticulo.precio_unitario * cantidad;
     const nuevaOrdenCompra = await prisma.ordenCompra.create({
       data: {
         cantidad,
         monto_total,
         fecha_estimada_recepcion: fechaEntrega,
         id_proveedor_articulo,
-        id_estado_orden_compra: 1, //Se me crea con estado pendiente por defecto 
+        id_estado_orden_compra: 1, // Estado pendiente por defecto
       },
       include: {
         estadoOrdenCompra: true,
@@ -45,25 +65,27 @@ export const crearOrdenCompra = async (req, res) => {
               select: {
                 id_proveedor: true,
                 nombre: true,
-              }
+              },
             },
             articulo: {
               select: {
                 id_articulo: true,
-                descripcion: true
-              }
+                descripcion: true,
+              },
             },
-          }
-        }
-      }
-    })
+          },
+        },
+      },
+    });
 
-    res.status(201).json(nuevaOrdenCompra)
+    res
+      .status(201)
+      .json({ ...nuevaOrdenCompra, puedeCrear: true, advertencia });
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ error: error.message })
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
-}
+};
 
 //GET ALL
 export const obtenerOrdenesCompra = async (req, res) => {
@@ -89,18 +111,18 @@ export const obtenerOrdenesCompra = async (req, res) => {
         },
         estadoOrdenCompra: true,
       },
-    })
+    });
 
-    res.status(200).json(ordenesCompra)
+    res.status(200).json(ordenesCompra);
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ error: error.message })
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
-}
+};
 
 // GET POR ID
 export const obtenerOrdenCompra = async (req, res) => {
-  const { id } = req.params
+  const { id } = req.params;
 
   try {
     const ordenCompra = await prisma.ordenCompra.findUnique({
@@ -109,44 +131,44 @@ export const obtenerOrdenCompra = async (req, res) => {
         proveedorArticulo: true,
         estadoOrdenCompra: true,
       },
-    })
+    });
 
     if (!ordenCompra) {
-      return res.status(404).json({ error: 'Orden de compra no encontrada' })
+      return res.status(404).json({ error: "Orden de compra no encontrada" });
     }
 
-    res.status(200).json(ordenCompra)
+    res.status(200).json(ordenCompra);
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ error: error.message })
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
-}
+};
 
 export const obtenerOrdenCompraActivaPorArticulo = async (req, res) => {
-  const { id_articulo } = req.params
+  const { id_articulo } = req.params;
 
   try {
     const ordenesCompra = await prisma.ordenCompra.findMany({
       where: {
         proveedorArticulo: {
-          id_articulo: +id_articulo
+          id_articulo: +id_articulo,
         },
         id_estado_orden_compra: {
-          in: [estadosOC.pendiente, estadosOC.enviada]
-        }
+          in: [estadosOC.pendiente, estadosOC.enviada],
+        },
       },
       include: {
         proveedorArticulo: true,
         estadoOrdenCompra: true,
       },
-    })
+    });
 
-    res.status(200).json(ordenesCompra)
+    res.status(200).json(ordenesCompra);
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ error: error.message })
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
-}
+};
 
 // PATCH
 export const actualizarOrdenCompra = async (req, res) => {
@@ -154,7 +176,7 @@ export const actualizarOrdenCompra = async (req, res) => {
   const { cantidad, estadoId } = req.body;
 
   if ((!cantidad || isNaN(cantidad) || cantidad <= 0) && !estadoId) {
-    return res.status(400).json({ error: 'Cantidad inválida' });
+    return res.status(400).json({ error: "Cantidad inválida" });
   }
 
   try {
@@ -164,27 +186,47 @@ export const actualizarOrdenCompra = async (req, res) => {
     });
 
     if (!ordenCompra) {
-      return res.status(404).json({ error: 'Orden de compra no encontrada' });
+      return res.status(404).json({ error: "Orden de compra no encontrada" });
     }
 
-    if (ordenCompra.estadoOrdenCompra.id_estado_orden_compra === estadosOC.cancelada) {
-      return res.status(400).json({ error: 'No se puede actualizar una orden de compra cancelada' });
+    if (
+      ordenCompra.estadoOrdenCompra.id_estado_orden_compra ===
+      estadosOC.cancelada
+    ) {
+      return res.status(400).json({
+        error: "No se puede actualizar una orden de compra cancelada",
+      });
     }
 
-    if (ordenCompra.estadoOrdenCompra.id_estado_orden_compra === estadosOC.finalizada) {
-      return res.status(400).json({ error: 'No se puede actualizar una orden de compra finalizada' });
+    if (
+      ordenCompra.estadoOrdenCompra.id_estado_orden_compra ===
+      estadosOC.finalizada
+    ) {
+      return res.status(400).json({
+        error: "No se puede actualizar una orden de compra finalizada",
+      });
     }
 
-    if (ordenCompra.estadoOrdenCompra.id_estado_orden_compra === estadosOC.enviada) {
+    if (
+      ordenCompra.estadoOrdenCompra.id_estado_orden_compra === estadosOC.enviada
+    ) {
       const { enviada, finalizada } = estadosOC;
 
-      const esEstadoValido = estadoId ? [enviada, finalizada].includes(+estadoId) : false;
+      const esEstadoValido = estadoId
+        ? [enviada, finalizada].includes(+estadoId)
+        : false;
       if (!esEstadoValido) {
-        return res.status(400).json({ error: 'No se puede actualizar una orden de compra enviada a un estado diferente a finalizada' });
+        return res.status(400).json({
+          error:
+            "No se puede actualizar una orden de compra enviada a un estado diferente a finalizada",
+        });
       }
 
       if (cantidad) {
-        return res.status(400).json({ error: 'No se puede actualizar la cantidad de una orden de compra enviada' });
+        return res.status(400).json({
+          error:
+            "No se puede actualizar la cantidad de una orden de compra enviada",
+        });
       }
 
       const ordenActualizada = await prisma.$transaction(async (tx) => {
@@ -192,52 +234,60 @@ export const actualizarOrdenCompra = async (req, res) => {
           where: { id_orden_compra: +id },
           data: {
             id_estado_orden_compra: estadosOC.finalizada, // Cambia el estado a finalizada
-            fecha_real_recepcion: new Date(), 
+            fecha_real_recepcion: new Date(),
           },
           include: {
             proveedorArticulo: {
               include: {
-                articulo: true
-              }
+                articulo: true,
+              },
             },
             estadoOrdenCompra: true,
-          }
+          },
         });
 
         await tx.articulo.update({
           where: {
-            id_articulo: ordenActualizada.proveedorArticulo.articulo.id_articulo
+            id_articulo:
+              ordenActualizada.proveedorArticulo.articulo.id_articulo,
           },
           data: {
             stock: {
-              increment: ordenActualizada.cantidad // Incrementa el stock del artículo
-            }
-          }
-        })
+              increment: ordenActualizada.cantidad, // Incrementa el stock del artículo
+            },
+          },
+        });
 
         return ordenActualizada;
       });
 
       // Eliminar el proveedorArticulo y estadoOrdenCompra para no enviarlos en la res
-      delete ordenActualizada.proveedorArticulo
-      delete ordenActualizada.estadoOrdenCompra
-      return res.status(200).json(ordenActualizada)
-
+      delete ordenActualizada.proveedorArticulo;
+      delete ordenActualizada.estadoOrdenCompra;
+      return res.status(200).json(ordenActualizada);
     }
-
 
     // Si la orden de compra está pendiente, se puede actualizar la cantidad y el estado
 
-    if (ordenCompra.estadoOrdenCompra.id_estado_orden_compra === estadosOC.pendiente) {
+    if (
+      ordenCompra.estadoOrdenCompra.id_estado_orden_compra ===
+      estadosOC.pendiente
+    ) {
       const precioUnitario = ordenCompra.proveedorArticulo.precio_unitario;
-      const nuevoMontoTotal = cantidad ? precioUnitario * cantidad : ordenCompra.monto_total;
+      const nuevoMontoTotal = cantidad
+        ? precioUnitario * cantidad
+        : ordenCompra.monto_total;
 
-      const { cancelada, enviada, pendiente } = estadosOC
+      const { cancelada, enviada, pendiente } = estadosOC;
 
-      const esEstadoValido = estadoId ? [cancelada, enviada, pendiente].includes(+estadoId) : false; // Verifica si el estado es válido
+      const esEstadoValido = estadoId
+        ? [cancelada, enviada, pendiente].includes(+estadoId)
+        : false; // Verifica si el estado es válido
 
       if (estadoId && !esEstadoValido) {
-        return res.status(400).json({ error: 'Estado inválido para una orden de compra pendiente' });
+        return res.status(400).json({
+          error: "Estado inválido para una orden de compra pendiente",
+        });
       }
 
       const ordenActualizada = await prisma.ordenCompra.update({
@@ -245,17 +295,20 @@ export const actualizarOrdenCompra = async (req, res) => {
         data: {
           cantidad: cantidad || ordenCompra.cantidad,
           monto_total: nuevoMontoTotal,
-          id_estado_orden_compra: esEstadoValido ? +estadoId : estadosOC.pendiente // Si no se proporciona estadoId, se mantiene como pendiente
+          id_estado_orden_compra: esEstadoValido
+            ? +estadoId
+            : estadosOC.pendiente, // Si no se proporciona estadoId, se mantiene como pendiente
         },
       });
-      
+
       return res.status(200).json(ordenActualizada);
     }
 
-    res.status(400).json({ error: 'Estado de orden de compra no válido para actualización' });
-
+    res.status(400).json({
+      error: "Estado de orden de compra no válido para actualización",
+    });
   } catch (error) {
-    console.error('Error al actualizar la orden de compra:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error("Error al actualizar la orden de compra:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
   }
 };
