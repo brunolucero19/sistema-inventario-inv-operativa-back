@@ -242,6 +242,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
         },
         include: {
           modeloInventario: true,
+          articulo: true,
         },
       }
     )
