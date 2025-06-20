@@ -208,3 +208,39 @@ export const eliminarProveedor = async (req, res) => {
     });
   }
 };
+
+export const modificarProveedor = async (req, res) => {
+  const { id_proveedor } = req.params;
+  const { nombre, apellido, email, telefono } = req.body;
+
+  if (!id_proveedor) {
+    return res.status(400).json({ error: "Falta el id del proveedor" });
+  }
+
+  try {
+    const proveedor = await prisma.proveedor.findUnique({
+      where: { id_proveedor: +id_proveedor },
+    });
+
+    if (!proveedor) {
+      return res.status(404).json({ error: "Proveedor no encontrado" });
+    }
+
+    const updatedProveedor = await prisma.proveedor.update({
+      where: { id_proveedor: +id_proveedor },
+      data: {
+        nombre,
+        apellido,
+        email,
+        telefono,
+      },
+    });
+
+    res.status(200).json(updatedProveedor);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: { message: "Error al modificar el proveedor" },
+    });
+  }
+};
