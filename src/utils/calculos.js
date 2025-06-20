@@ -35,25 +35,29 @@ export const calcularCGI = (
   return cgi
 }
 
-export const calcularStockSeguridadLF = (z, desviacionEstDem) => {
-  const stock_seguridad = z * desviacionEstDem
+export const calcularStockSeguridadLF = (
+  z,
+  desviacionEstDem,
+  demoraEntrega
+) => {
+  const stock_seguridad = z * desviacionEstDem * Math.sqrt(demoraEntrega)
   return stock_seguridad
 }
 
 export const calcularStockSeguridadIF = (T, L, z, desv_dem) => {
-  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2));
+  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2))
   const stock_seguridad = z * desv_rev_entrega
-  return stock_seguridad;
+  return stock_seguridad
 }
 
 export const calcularStockAReponer = (d, T, L, z, desv_dem, I) => {
-  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2));
-  const q = d * (T + L) + (z * desv_rev_entrega) - I
+  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2))
+  const q = d * (T + L) + z * desv_rev_entrega - I
   return q
 }
 
 export const calcularInventarioMaximo = (d, T, L, z, desv_dem) => {
-  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2));
-  const inv_max = d * (T + L) + (z * desv_rev_entrega)
+  const desv_rev_entrega = Math.sqrt((T + L) * Math.pow(desv_dem, 2))
+  const inv_max = d * (T + L) + z * desv_rev_entrega
   return inv_max
 }

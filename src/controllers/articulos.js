@@ -117,8 +117,9 @@ export const modificarArticulo = async (req, res) => {
         
         const desviacion_estandar = articuloActualizado.desviacion_est_dem;
         const nivel_servicio = proveedorArticulo.nivel_servicio;
+        const demora_entrega = proveedorArticulo.demora_entrega;
 
-        const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], desviacion_estandar);
+        const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], desviacion_estandar, demora_entrega);
 
         const D = articuloActualizado.demanda_articulo
         const S = proveedorArticulo.costo_pedido

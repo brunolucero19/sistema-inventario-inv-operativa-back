@@ -1,22 +1,25 @@
-import { PrismaClient } from "@prisma/client";
-import { validateProveedor } from "../validators/proveedor.schema.js";
-import { estadosOC } from "../utils/constants.js";
+import { PrismaClient } from '@prisma/client'
+import { validateProveedor } from '../validators/proveedor.schema.js'
+import { estadosOC, nivelServicioZ } from '../utils/constants.js'
 import {
   calcularCGI,
   calcularCostoCompra,
+  calcularInventarioMaximo,
   calcularLoteOptimoPuntoPedido,
-} from "../utils/calculos.js";
+  calcularStockSeguridadIF,
+  calcularStockSeguridadLF,
+} from '../utils/calculos.js'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
 export const crearProveedor = async (req, res) => {
-  const result = validateProveedor(req.body);
+  const result = validateProveedor(req.body)
 
   if (result.error) {
-    return res.status(400).json({ error: result.error.issues });
+    return res.status(400).json({ error: result.error.issues })
   }
 
-  const { nombre, apellido, email, telefono, articulos } = result.data;
+  const { nombre, apellido, email, telefono, articulos } = result.data
 
   try {
     const resultado = await prisma.$transaction(async (tx) => {
@@ -27,7 +30,7 @@ export const crearProveedor = async (req, res) => {
           email,
           telefono,
         },
-      });
+      })
 
       // Asociar artículos al proveedor
       if (articulos && articulos.length > 0) {
@@ -36,28 +39,29 @@ export const crearProveedor = async (req, res) => {
             where: {
               id_articulo: articulo.id_articulo,
             },
-          });
+          })
 
           const {
             id_articulo,
             precio_unitario,
             demora_entrega,
-            costo_pedido, // Esto es (Demanda / Cantidad a pedir) * Costo de hacer un Pedido
+            costo_pedido,
             modelo_seleccionado,
             es_predeterminado,
             periodo_revision,
-          } = articulo;
+            nivel_servicio,
+          } = articulo
 
           const costo_compra = calcularCostoCompra(
             precio_unitario,
             art.demanda_articulo
-          );
+          )
 
           const cgi = calcularCGI(
             art.costo_almacenamiento,
             costo_pedido,
             costo_compra
-          );
+          )
 
           const nuevoProveedorArticulo = await prisma.proveedorArticulo.create({
             data: {
@@ -70,21 +74,45 @@ export const crearProveedor = async (req, res) => {
               modelo_seleccionado,
               es_predeterminado,
               cgi,
+              nivel_servicio,
             },
-          });
+            include: {
+              proveedor: true,
+              articulo: true,
+            },
+          })
+
+          // Setear en false a los demás proveedores del artículo si el nuevo es predeterminado
+          if (es_predeterminado) {
+            await prisma.proveedorArticulo.updateMany({
+              where: {
+                id_articulo: id_articulo,
+                id_proveedor: {
+                  not: nuevoProveedor.id_proveedor,
+                },
+              },
+              data: { es_predeterminado: false },
+            })
+          }
 
           const modeloInventarioNuevo = await prisma.modeloInventario.create({
             data: {
               id_proveedor_articulo:
                 nuevoProveedorArticulo.id_proveedor_articulo,
             },
-          });
+          })
 
           //Calculo de lote optimo si el modelo es de lote fijo
-          if (modelo_seleccionado === "lote_fijo") {
+          if (modelo_seleccionado === 'lote_fijo') {
             const { Q, R } = await calcularLoteOptimoPuntoPedido(
               nuevoProveedorArticulo
-            );
+            )
+
+            const stock_seguridad = calcularStockSeguridadLF(
+              nivelServicioZ[nivel_servicio],
+              nuevoProveedorArticulo.articulo.desviacion_est_dem,
+              nuevoProveedorArticulo.demora_entrega
+            )
 
             await prisma.modeloInventario.update({
               where: {
@@ -97,12 +125,32 @@ export const crearProveedor = async (req, res) => {
                 punto_pedido: R,
                 periodo_revision: null, // No se usa en lote fijo
                 fecha_ultima_revision: null, // No se usa en lote fijo
+                stock_seguridad,
               },
-            });
+            })
           }
 
           // Para modelo de intervalo fijo
-          if (modelo_seleccionado === "intervalo_fijo") {
+          if (modelo_seleccionado === 'intervalo_fijo') {
+            const desviacion_estandar =
+              nuevoProveedorArticulo.articulo.desviacion_est_dem
+            const stock_seguridad = calcularStockSeguridadIF(
+              periodo_revision,
+              demora_entrega,
+              nivelServicioZ[nivel_servicio],
+              desviacion_estandar
+            )
+
+            const demanda_diaria =
+              nuevoProveedorArticulo.articulo.demanda_articulo / 365
+
+            const inventario_maximo = calcularInventarioMaximo(
+              demanda_diaria,
+              periodo_revision,
+              demora_entrega,
+              nivelServicioZ[nivel_servicio],
+              desviacion_estandar
+            )
             await prisma.modeloInventario.update({
               where: {
                 id_modelo_inventario:
@@ -113,53 +161,55 @@ export const crearProveedor = async (req, res) => {
                 fecha_ultima_revision: new Date(),
                 lote_optimo: null,
                 punto_pedido: null,
+                stock_seguridad,
+                inventario_maximo,
               },
-            });
+            })
           }
         }
       }
-      return nuevoProveedor;
-    });
+      return nuevoProveedor
+    })
 
-    res.status(201).json(resultado);
+    res.status(201).json(resultado)
   } catch (error) {
-    if (error.code === "P2002") {
-      return res.status(409).json({ error: "El email ya está en uso." });
+    if (error.code === 'P2002') {
+      return res.status(409).json({ error: 'El email ya está en uso.' })
     }
-    console.error(error);
+    console.error(error)
     res.status(500).json({
-      error: [{ message: "Error al crear el proveedor" }],
-    });
+      error: [{ message: 'Error al crear el proveedor' }],
+    })
   }
-};
+}
 
 export const obtenerProveedores = async (req, res) => {
   try {
     const proveedores = await prisma.proveedor.findMany({
       where: { fechaBaja: null },
-    });
-    res.status(200).json(proveedores);
+    })
+    res.status(200).json(proveedores)
   } catch (error) {
-    console.error(error);
+    console.error(error)
     res.status(500).json({
-      error: [{ message: "Error al obtener los proveedores" }],
-    });
+      error: [{ message: 'Error al obtener los proveedores' }],
+    })
   }
-};
+}
 
 export const eliminarProveedor = async (req, res) => {
-  const { id_proveedor } = req.query;
+  const { id_proveedor } = req.query
   if (!id_proveedor) {
-    return res.status(400).json({ error: "Falta el id del proveedor" });
+    return res.status(400).json({ error: 'Falta el id del proveedor' })
   }
 
   try {
     const proveedor = await prisma.proveedor.findUnique({
       where: { id_proveedor: +id_proveedor },
-    });
+    })
 
     if (!proveedor) {
-      throw new Error("Proveedor no encontrado");
+      throw new Error('Proveedor no encontrado')
     }
 
     // Verificar que el proveedor no sea el predeterminado de al menos un artículo
@@ -168,11 +218,11 @@ export const eliminarProveedor = async (req, res) => {
         id_proveedor: +id_proveedor,
         es_predeterminado: true,
       },
-    });
+    })
     if (proveedorArticulo) {
       throw new Error(
-        "No se puede eliminar el proveedor porque es el predeterminado de al menos un artículo."
-      );
+        'No se puede eliminar el proveedor porque es el predeterminado de al menos un artículo.'
+      )
     }
 
     // // Verificar que el proveedor no tenga órdenes de compra pendientes
@@ -186,44 +236,44 @@ export const eliminarProveedor = async (req, res) => {
           id_proveedor: +id_proveedor,
         },
       },
-    });
+    })
 
     if (ordenPendiente) {
       throw new Error(
-        "No se puede eliminar el proveedor porque tiene órdenes de compra pendientes."
-      );
+        'No se puede eliminar el proveedor porque tiene órdenes de compra pendientes.'
+      )
     }
 
     // Marcar el proveedor como eliminado
     await prisma.proveedor.update({
       where: { id_proveedor: +id_proveedor },
       data: { fechaBaja: new Date() },
-    });
+    })
 
-    res.status(200).json({ message: "Proveedor eliminado correctamente" });
+    res.status(200).json({ message: 'Proveedor eliminado correctamente' })
   } catch (error) {
-    console.error(error);
+    console.error(error)
     res.status(500).json({
-      error: { message: error.message || "Error al eliminar el proveedor" },
-    });
+      error: { message: error.message || 'Error al eliminar el proveedor' },
+    })
   }
-};
+}
 
 export const modificarProveedor = async (req, res) => {
-  const { id_proveedor } = req.params;
-  const { nombre, apellido, email, telefono } = req.body;
+  const { id_proveedor } = req.params
+  const { nombre, apellido, email, telefono } = req.body
 
   if (!id_proveedor) {
-    return res.status(400).json({ error: "Falta el id del proveedor" });
+    return res.status(400).json({ error: 'Falta el id del proveedor' })
   }
 
   try {
     const proveedor = await prisma.proveedor.findUnique({
       where: { id_proveedor: +id_proveedor },
-    });
+    })
 
     if (!proveedor) {
-      return res.status(404).json({ error: "Proveedor no encontrado" });
+      return res.status(404).json({ error: 'Proveedor no encontrado' })
     }
 
     const updatedProveedor = await prisma.proveedor.update({
@@ -234,13 +284,13 @@ export const modificarProveedor = async (req, res) => {
         email,
         telefono,
       },
-    });
+    })
 
-    res.status(200).json(updatedProveedor);
+    res.status(200).json(updatedProveedor)
   } catch (error) {
-    console.error(error);
+    console.error(error)
     res.status(500).json({
-      error: { message: "Error al modificar el proveedor" },
-    });
+      error: { message: 'Error al modificar el proveedor' },
+    })
   }
-};
+}

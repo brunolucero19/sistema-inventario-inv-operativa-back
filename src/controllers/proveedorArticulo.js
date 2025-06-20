@@ -1,6 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 import { validateProveedorArticulo } from '../validators/proveedorArticulo.schema.js'
-import { calcularLoteOptimoPuntoPedido, calcularStockSeguridadLF, calcularStockSeguridadIF, calcularInventarioMaximo } from '../utils/calculos.js'
+import {
+  calcularLoteOptimoPuntoPedido,
+  calcularStockSeguridadLF,
+  calcularStockSeguridadIF,
+  calcularInventarioMaximo,
+} from '../utils/calculos.js'
 import { nivelServicioZ } from '../utils/constants.js'
 
 const prisma = new PrismaClient()
@@ -31,7 +36,10 @@ export const crearProveedorArticulo = async (req, res) => {
       where: { id_articulo },
     })
 
-    const costo_compra = articulo.demanda_articulo * precio_unitario
+    const costo_compra = calcularCostoCompra(
+      precio_unitario,
+      articulo.demanda_articulo
+    )
 
     const nuevoProveedorArticulo = await prisma.proveedorArticulo.create({
       data: {
@@ -63,7 +71,11 @@ export const crearProveedorArticulo = async (req, res) => {
         nuevoProveedorArticulo
       )
 
-      const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], nuevoProveedorArticulo.articulo.desviacion_est_dem);
+      const stock_seguridad = calcularStockSeguridadLF(
+        nivelServicioZ[nivel_servicio],
+        nuevoProveedorArticulo.articulo.desviacion_est_dem,
+        demora_entrega
+      )
 
       await prisma.modeloInventario.update({
         where: {
@@ -74,19 +86,32 @@ export const crearProveedorArticulo = async (req, res) => {
           punto_pedido: R,
           periodo_revision: null, // No se usa en lote fijo
           fecha_ultima_revision: null, // No se usa en lote fijo
-          stock_seguridad: stock_seguridad
+          stock_seguridad: stock_seguridad,
         },
       })
     }
 
     // Para modelo de intervalo fijo
     if (modelo_seleccionado === 'intervalo_fijo') {
-      const desviacion_estandar = nuevoProveedorArticulo.articulo.desviacion_est_dem
-      const stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
-      
-      const demanda_diaria = nuevoProveedorArticulo.articulo.demanda_articulo / 365;
+      const desviacion_estandar =
+        nuevoProveedorArticulo.articulo.desviacion_est_dem
+      const stock_seguridad = calcularStockSeguridadIF(
+        periodo_revision,
+        demora_entrega,
+        nivelServicioZ[nivel_servicio],
+        desviacion_estandar
+      )
 
-      const inventario_maximo = calcularInventarioMaximo(demanda_diaria, periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
+      const demanda_diaria =
+        nuevoProveedorArticulo.articulo.demanda_articulo / 365
+
+      const inventario_maximo = calcularInventarioMaximo(
+        demanda_diaria,
+        periodo_revision,
+        demora_entrega,
+        nivelServicioZ[nivel_servicio],
+        desviacion_estandar
+      )
 
       await prisma.modeloInventario.update({
         where: {
@@ -98,7 +123,7 @@ export const crearProveedorArticulo = async (req, res) => {
           lote_optimo: null,
           punto_pedido: null,
           stock_seguridad: stock_seguridad,
-          inventario_maximo: inventario_maximo
+          inventario_maximo: inventario_maximo,
         },
       })
     }
@@ -146,7 +171,7 @@ export const obtenerProveedoresPorArticulo = async (req, res) => {
         modeloInventario: {
           select: {
             lote_optimo: true,
-          }
+          },
         },
       },
     })
@@ -216,20 +241,20 @@ export const actualizarProveedorArticulo = async (req, res) => {
           id_articulo,
         },
         include: {
-          modeloInventario: true
-        }
+          modeloInventario: true,
+        },
       }
     )
     if (!proveedorArticuloExistente) {
       throw new Error('El proveedor-artículo no existe o no está asociado.')
     }
 
-
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
 
     if (!es_predeterminado && proveedorArticuloExistente.es_predeterminado) {
       return res.status(400).json({
-        error: 'No se puede desmarcar a éste proveedor como el predeterminado. Primero debe asignarle otro proveedor como predeterminado.',
+        error:
+          'No se puede desmarcar a éste proveedor como el predeterminado. Primero debe asignarle otro proveedor como predeterminado.',
       })
     }
 
@@ -247,7 +272,8 @@ export const actualizarProveedorArticulo = async (req, res) => {
     }
 
     // Actualizar el proveedor-artículo
-    const costo_compra = proveedorArticuloExistente.articulo.demanda_articulo * precio_unitario;
+    const costo_compra =
+      proveedorArticuloExistente.articulo.demanda_articulo * precio_unitario
     const proveedorArticuloActualizado = await prisma.proveedorArticulo.update({
       where: {
         id_proveedor_articulo: proveedorArticuloExistente.id_proveedor_articulo,
@@ -262,8 +288,8 @@ export const actualizarProveedorArticulo = async (req, res) => {
         es_predeterminado,
       },
       include: {
-        articulo: true
-      }
+        articulo: true,
+      },
     })
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
     await prisma.proveedorArticulo.updateMany({
@@ -280,11 +306,21 @@ export const actualizarProveedorArticulo = async (req, res) => {
     const modeloInventarioUpdated = {}
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
-      if(proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio) {
-        modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], proveedorArticuloActualizado.articulo.desviacion_est_dem);
+      if (
+        proveedorArticuloExistente.nivel_servicio !==
+        proveedorArticuloActualizado.nivel_servicio
+      ) {
+        modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadLF(
+          nivelServicioZ[nivel_servicio],
+          proveedorArticuloActualizado.articulo.desviacion_est_dem,
+          demora_entrega
+        )
       }
-      if(proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.costo_pedido !== proveedorArticuloActualizado.costo_pedido
+      if (
+        proveedorArticuloExistente.demora_entrega !==
+          proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.costo_pedido !==
+          proveedorArticuloActualizado.costo_pedido
       ) {
         const { Q, R } = await calcularLoteOptimoPuntoPedido(
           proveedorArticuloActualizado
@@ -292,7 +328,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
         modeloInventarioUpdated.lote_optimo = Q
         modeloInventarioUpdated.punto_pedido = R
       }
-      
+
       await prisma.modeloInventario.update({
         where: {
           id_proveedor_articulo:
@@ -308,24 +344,49 @@ export const actualizarProveedorArticulo = async (req, res) => {
 
     // Para modelo de intervalo fijo
     if (modelo_seleccionado === 'intervalo_fijo') {
-      if(proveedorArticuloExistente.periodo_revision !== proveedorArticuloActualizado.periodo_revision ||
-        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio
+      if (
+        proveedorArticuloExistente.periodo_revision !==
+          proveedorArticuloActualizado.periodo_revision ||
+        proveedorArticuloExistente.demora_entrega !==
+          proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.nivel_servicio !==
+          proveedorArticuloActualizado.nivel_servicio
       ) {
-        const desviacion_estandar = proveedorArticuloActualizado.articulo.desviacion_est_dem;
-        modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
-        
+        const desviacion_estandar =
+          proveedorArticuloActualizado.articulo.desviacion_est_dem
+        modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadIF(
+          periodo_revision,
+          demora_entrega,
+          nivelServicioZ[nivel_servicio],
+          desviacion_estandar
+        )
       }
-      if(proveedorArticuloExistente.periodo_revision !== proveedorArticuloActualizado.periodo_revision ||
-        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio
+      if (
+        proveedorArticuloExistente.periodo_revision !==
+          proveedorArticuloActualizado.periodo_revision ||
+        proveedorArticuloExistente.demora_entrega !==
+          proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.nivel_servicio !==
+          proveedorArticuloActualizado.nivel_servicio
       ) {
-        const demanda_diaria = proveedorArticuloActualizado.articulo.demanda_articulo / 365;
-        modeloInventarioUpdated.inventario_maximo = calcularInventarioMaximo(demanda_diaria, periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
+        const demanda_diaria =
+          proveedorArticuloActualizado.articulo.demanda_articulo / 365
+        modeloInventarioUpdated.inventario_maximo = calcularInventarioMaximo(
+          demanda_diaria,
+          periodo_revision,
+          demora_entrega,
+          nivelServicioZ[nivel_servicio],
+          desviacion_estandar
+        )
       }
 
       // Traer datos actuales del modelo inventario
-      const stock_seguridad = calcularStockSeguridadIF(periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desvEstDem.desviacion_est_dem);
+      const stock_seguridad = calcularStockSeguridadIF(
+        periodo_revision,
+        demora_entrega,
+        nivelServicioZ[nivel_servicio],
+        desvEstDem.desviacion_est_dem
+      )
       const modeloInventarioActual = await prisma.modeloInventario.findUnique({
         where: {
           id_proveedor_articulo:
@@ -386,13 +447,15 @@ export const eliminarProveedorArticulo = async (req, res) => {
 
     if (proveedorArticulosCount <= 1) {
       return res.status(400).json({
-        error: 'No se puede eliminar la última relación asociada a este proveedor.'
+        error:
+          'No se puede eliminar la última relación asociada a este proveedor.',
       })
     }
     // Eliminar el modelo de inventario asociado
     if (proveedorArticulo.es_predeterminado) {
       return res.status(400).json({
-        error: 'No se puede eliminar un Proveedor-artículo predeterminado. Debe cambiar el proveedor predeterminado antes de eliminar este registro.',
+        error:
+          'No se puede eliminar un Proveedor-artículo predeterminado. Debe cambiar el proveedor predeterminado antes de eliminar este registro.',
       })
     }
     await prisma.modeloInventario.delete({

@@ -28,6 +28,11 @@ export const proveedorSchema = z.object({
         })
         .optional()
         .nullable(),
+      nivel_servicio: z
+        .number()
+        .nonnegative({
+          message: 'El nivel de servicio debe ser un número no negativo',
+        }),
     })
   ),
 })
