@@ -561,6 +561,9 @@ export const obtenerCGIPorArticulo = async (req, res) => {
         proveedor: {
           fechaBaja: null,
         },
+        articulo: {
+          fechaBaja: null,
+        },
       },
       select: {
         precio_unitario: true,
