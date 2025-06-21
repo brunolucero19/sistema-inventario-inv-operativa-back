@@ -5,6 +5,7 @@ import {
   eliminarProveedorArticulo,
   obtenerArticulosPorProveedor,
   obtenerCGIPorArticulo,
+  obtenerProveedorArticuloAreponner,
   obtenerProveedoresPorArticulo,
 } from '../controllers/proveedorArticulo.js'
 const router = express.Router()
@@ -20,5 +21,7 @@ router.patch('/actualizar-proveedor-articulo', actualizarProveedorArticulo)
 router.delete('/eliminar-proveedor-articulo', eliminarProveedorArticulo)
 
 router.get('/obtener-cgi-articulo/:idArticulo', obtenerCGIPorArticulo)
+
+router.get('/obtener-proveedores-articulos-a-reponer', obtenerProveedorArticuloAreponner)
 
 export default router
