@@ -66,7 +66,7 @@ export const crearProveedor = async (req, res) => {
               costo_pedido,
               costo_compra,
               modelo_seleccionado,
-              es_predeterminado,              
+              es_predeterminado,
               nivel_servicio,
             },
             include: {
@@ -95,8 +95,11 @@ export const crearProveedor = async (req, res) => {
             },
           })
 
-          let cgi;
-          
+          let cgi = 0;
+
+          const D = nuevoProveedorArticulo.articulo.demanda_articulo;
+          const S = nuevoProveedorArticulo.costo_pedido;
+          const H = nuevoProveedorArticulo.articulo.costo_almacenamiento;
           //Calculo de lote optimo si el modelo es de lote fijo
           if (modelo_seleccionado === 'lote_fijo') {
             const { Q, R } = await calcularLoteOptimoPuntoPedido(
@@ -110,13 +113,10 @@ export const crearProveedor = async (req, res) => {
             )
 
             // Calculo CGI
-            const D = nuevoProveedorArticulo.articulo.demanda_articulo;
-            const S = nuevoProveedorArticulo.costo_pedido;
-            const costo_pedido = (D / Q) * S;
+            const costo_pedido = Q === 0 ? null : (D / Q) * S;
 
-            const H = nuevoProveedorArticulo.articulo.costo_almacenamiento;
             const costo_almacenamiento = (Q / 2) * H;
-            
+
             cgi = calcularCGI(
               costo_almacenamiento,
               costo_pedido,
@@ -141,8 +141,7 @@ export const crearProveedor = async (req, res) => {
 
           // Para modelo de intervalo fijo
           if (modelo_seleccionado === 'intervalo_fijo') {
-            const desviacion_estandar =
-              nuevoProveedorArticulo.articulo.desviacion_est_dem
+            const desviacion_estandar = nuevoProveedorArticulo.articulo.desviacion_est_dem
             const stock_seguridad = calcularStockSeguridadIF(
               periodo_revision,
               demora_entrega,
@@ -150,8 +149,19 @@ export const crearProveedor = async (req, res) => {
               desviacion_estandar
             )
 
-            const demanda_diaria =
-              nuevoProveedorArticulo.articulo.demanda_articulo / 365
+            const demanda_diaria = nuevoProveedorArticulo.articulo.demanda_articulo / 365;
+
+            // Calculo CGI
+            const T = periodo_revision / 365;
+            const costo_pedido = T === 0 ? null : (1 / T) * S;
+
+            const costo_almacenamiento = ((D * T) / 2) * H;
+
+            cgi = calcularCGI(
+              costo_almacenamiento,
+              costo_pedido,
+              costo_compra
+            )
 
             const inventario_maximo = calcularInventarioMaximo(
               demanda_diaria,

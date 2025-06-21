@@ -6,6 +6,8 @@ import {
   calcularStockSeguridadIF,
   calcularInventarioMaximo,
   calcularCostoCompra,
+  calcularCGI,
+  redondearA2Decimales,
 } from '../utils/calculos.js'
 import { estadosOC, nivelServicioZ } from '../utils/constants.js'
 
@@ -67,11 +69,10 @@ export const crearProveedorArticulo = async (req, res) => {
     })
 
     let cgi = 0
-    
+
     const D = nuevoProveedorArticulo.articulo.demanda_articulo;
     const S = nuevoProveedorArticulo.costo_pedido;
     const H = nuevoProveedorArticulo.articulo.costo_almacenamiento;
-    const T = periodo_revision / 365;
 
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
@@ -87,12 +88,12 @@ export const crearProveedorArticulo = async (req, res) => {
         nuevoProveedorArticulo.articulo.desviacion_est_dem,
         demora_entrega
       )
-      
+
       // Calculo CGI
-      const costo_pedido = (D / Q) * S;
+      const costo_pedido = Q === 0 ? null : (D / Q) * S;
 
       const costo_almacenamiento = (Q / 2) * H;
-      
+
       cgi = calcularCGI(
         costo_almacenamiento,
         costo_pedido,
@@ -127,8 +128,7 @@ export const crearProveedorArticulo = async (req, res) => {
       )
 
       // Calculo Inventario Maximo
-      const demanda_diaria =
-        nuevoProveedorArticulo.articulo.demanda_articulo / 365
+      const demanda_diaria = nuevoProveedorArticulo.articulo.demanda_articulo / 365
 
       const inventario_maximo = calcularInventarioMaximo(
         demanda_diaria,
@@ -138,11 +138,12 @@ export const crearProveedorArticulo = async (req, res) => {
         desviacion_estandar
       )
 
-      // Calculo CGI      
-      const costo_pedido = (1 / T) * S;
+      // Calculo CGI
+      const T = periodo_revision / 365;
+      const costo_pedido = T === 0 ? null : (1 / T) * S;
 
       const costo_almacenamiento = ((D * T) / 2) * H;
-      
+
       cgi = calcularCGI(
         costo_almacenamiento,
         costo_pedido,
@@ -287,8 +288,8 @@ export const actualizarProveedorArticulo = async (req, res) => {
           id_articulo,
         },
         include: {
-          modeloInventario: true,
           articulo: true,
+          modeloInventario: true
         },
       }
     )
@@ -335,6 +336,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
       },
       include: {
         articulo: true,
+        modeloInventario: true
       },
     })
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
@@ -350,6 +352,13 @@ export const actualizarProveedorArticulo = async (req, res) => {
     })
 
     const modeloInventarioUpdated = {}
+
+    let cgi = proveedorArticuloActualizado.cgi;
+
+    const D = proveedorArticuloActualizado.articulo.demanda_articulo;
+    const H = proveedorArticuloActualizado.articulo.costo_almacenamiento;
+    const S = proveedorArticuloActualizado.costo_pedido;
+
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
       if (
@@ -373,6 +382,17 @@ export const actualizarProveedorArticulo = async (req, res) => {
         )
         modeloInventarioUpdated.lote_optimo = Q
         modeloInventarioUpdated.punto_pedido = R
+
+        // Calculo CGI
+        const costo_pedido = Q === 0 ? null : (D / Q) * S;
+
+        const costo_almacenamiento = (Q / 2) * H;
+
+        cgi = calcularCGI(
+          costo_almacenamiento,
+          costo_pedido,
+          costo_compra
+        )
       }
 
 
@@ -393,7 +413,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
     // Para modelo de intervalo fijo
     if (modelo_seleccionado === 'intervalo_fijo') {
       if (
-        proveedorArticuloExistente.periodo_revision !== proveedorArticuloActualizado.periodo_revision ||
+        proveedorArticuloExistente.modeloInventario.periodo_revision !== proveedorArticuloActualizado.modeloInventario.periodo_revision ||
         proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
         proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio ||
         proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
@@ -406,15 +426,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
           nivelServicioZ[nivel_servicio],
           desviacion_estandar
         )
-      }
-      if (
-        proveedorArticuloExistente.periodo_revision !== proveedorArticuloActualizado.periodo_revision ||
-        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio ||
-        proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
-      ) {
-        const demanda_diaria =
-          proveedorArticuloActualizado.articulo.demanda_articulo / 365
+        const demanda_diaria = proveedorArticuloActualizado.articulo.demanda_articulo / 365
 
         modeloInventarioUpdated.inventario_maximo = calcularInventarioMaximo(
           demanda_diaria,
@@ -422,6 +434,18 @@ export const actualizarProveedorArticulo = async (req, res) => {
           demora_entrega,
           nivelServicioZ[nivel_servicio],
           proveedorArticuloActualizado.articulo.desviacion_est_dem
+        )
+
+        // Calculo CGI
+        const T = proveedorArticuloActualizado.periodo_revision / 365;
+        const costo_pedido = T === 0 ? null : (1 / T) * S;
+
+        const costo_almacenamiento = ((D * T) / 2) * H;
+
+        cgi = calcularCGI(
+          costo_almacenamiento,
+          costo_pedido,
+          costo_compra
         )
       }
 
@@ -459,6 +483,17 @@ export const actualizarProveedorArticulo = async (req, res) => {
         },
       })
     }
+
+    // Se actualiza el CGI
+    await prisma.proveedorArticulo.update({
+      where: {
+        id_proveedor_articulo:
+          proveedorArticuloActualizado.id_proveedor_articulo,
+      },
+      data: {
+        cgi: cgi,
+      },
+    })
 
     res.status(200).json(proveedorArticuloActualizado)
   } catch (error) {
@@ -543,16 +578,63 @@ export const obtenerCGIPorArticulo = async (req, res) => {
         },
       },
       select: {
+        precio_unitario: true,
+        costo_pedido: true,
         cgi: true,
+        modelo_seleccionado: true,
         proveedor: {
           select: {
             nombre: true,
           },
         },
+        articulo: {
+          select: {
+            demanda_articulo: true,
+            costo_almacenamiento: true,
+          }
+        },
+        modeloInventario: {
+          select: {
+            lote_optimo: true,
+            periodo_revision: true
+          }
+        },
       },
     })
 
-    res.status(200).json(data)
+    const resultados = data.map((pa) => {
+      const D = pa.articulo.demanda_articulo;
+      const H = pa.articulo.costo_almacenamiento;
+      const C = pa.precio_unitario;
+      const S = pa.costo_pedido;
+
+      const costo_compra = D * C;
+
+      let costo_pedido = 0;
+      let costo_almacenamiento = 0;
+
+      if (pa.modelo_seleccionado === 'lote_fijo') {
+        const Q = pa.modeloInventario.lote_optimo;
+        costo_pedido = Q === 0 ? null : (D / Q) * S;
+        costo_almacenamiento = (Q / 2) * H;
+      } else if (pa.modelo_seleccionado === 'intervalo_fijo') {
+        const T = pa.modeloInventario.periodo_revision / 365;
+        costo_pedido = T === 0 ? null : (1 / T) * S;
+        costo_almacenamiento = ((D * T) / 2) * H;
+      }
+
+      const cgi = costo_compra + costo_pedido + costo_almacenamiento;
+
+      return {
+        proveedor: pa.proveedor.nombre,
+        costo_compra: redondearA2Decimales(costo_compra),
+        costo_pedido: redondearA2Decimales(costo_pedido),
+        costo_almacenamiento: redondearA2Decimales(costo_almacenamiento),
+        cgi: redondearA2Decimales(cgi),
+      };
+    });
+
+    res.status(200).json(resultados);
   } catch (error) {
     console.error(error)
     res.status(500).json({

@@ -61,3 +61,5 @@ export const calcularInventarioMaximo = (d, T, L, z, desv_dem) => {
   const inv_max = d * (T + L) + z * desv_rev_entrega
   return inv_max
 }
+
+export const redondearA2Decimales = (valor) => Number(valor.toFixed(2));
