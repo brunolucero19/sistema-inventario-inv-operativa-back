@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 import { validateArticulo } from '../validators/articulo.schema.js'
 import { estadosOC, nivelServicioZ } from '../utils/constants.js'
-import { calcularInventarioMaximo, calcularLoteOptimoPuntoPedido, calcularStockSeguridadIF, calcularStockSeguridadLF } from '../utils/calculos.js'
+import { calcularCGI, calcularInventarioMaximo, calcularLoteOptimoPuntoPedido, calcularStockSeguridadIF, calcularStockSeguridadLF } from '../utils/calculos.js'=======
+
 
 const prisma = new PrismaClient()
 
@@ -118,11 +119,35 @@ export const modificarArticulo = async (req, res) => {
 
       for (const proveedorArticulo of proveedoresArticulos) {
 
+        const desviacion_estandar = articuloActualizado.desviacion_est_dem;
+        const nivel_servicio = proveedorArticulo.nivel_servicio;
+        const demora_entrega = proveedorArticulo.demora_entrega;
+
         const { demora_entrega, nivel_servicio } = proveedorArticulo
         const desviacion_estandar = articuloActualizado.desviacion_est_dem
         const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], desviacion_estandar, demora_entrega);
         const {Q, R} = await calcularLoteOptimoPuntoPedido(proveedorArticulo, stock_seguridad)
 
+        const D = articuloActualizado.demanda_articulo;
+        const S = proveedorArticulo.costo_pedido;
+        const H = articuloActualizado.costo_almacenamiento;
+        const C = proveedorArticulo.precio_unitario;
+
+        const Q = Math.round(Math.sqrt((2 * D * S) / H))
+
+
+        // Calculo CGI
+        const costo_pedido = Q === 0 ? null : (D / Q) * S;
+
+        const costo_almacenamiento = (Q / 2) * H;
+
+        const costo_compra = D * C;
+
+        const cgi = calcularCGI(
+          costo_almacenamiento,
+          costo_pedido,
+          costo_compra
+        )
 
         await prisma.modeloInventario.update({
           where: {
@@ -134,11 +159,21 @@ export const modificarArticulo = async (req, res) => {
             stock_seguridad: stock_seguridad
           },
         })
+
+        await prisma.proveedorArticulo.update({
+          where: {
+            id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo,
+          },
+          data: {
+            cgi: cgi,
+          },
+        })
       }
     }
 
     if (articuloOriginal.demanda_articulo !== articuloActualizado.demanda_articulo ||
-      articuloOriginal.desviacion_est_dem !== articuloActualizado.desviacion_est_dem) {
+      articuloOriginal.desviacion_est_dem !== articuloActualizado.desviacion_est_dem ||
+      articuloOriginal.costo_almacenamiento !== articuloActualizado.costo_almacenamiento) {
       const proveedoresArticulos = await prisma.proveedorArticulo.findMany({
         where: {
           id_articulo: articuloActualizado.id_articulo,
@@ -161,6 +196,25 @@ export const modificarArticulo = async (req, res) => {
 
         const inventario_maximo = calcularInventarioMaximo(demanda_diaria, periodo_revision, demora_entrega, nivelServicioZ[nivel_servicio], desviacion_estandar);
 
+        const D = articuloActualizado.demanda_articulo;
+        const S = proveedorArticulo.costo_pedido;
+        const H = articuloActualizado.costo_almacenamiento;
+        const C = proveedorArticulo.precio_unitario;
+
+        // Calculo CGI
+        const T = periodo_revision / 365;
+        const costo_pedido = T === 0 ? null : (1 / T) * S;
+
+        const costo_almacenamiento = ((D * T) / 2) * H;
+
+        const costo_compra = D * C;
+
+        const cgi = calcularCGI(
+          costo_almacenamiento,
+          costo_pedido,
+          costo_compra
+        )
+
         await prisma.modeloInventario.update({
           where: {
             id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo,
@@ -168,6 +222,15 @@ export const modificarArticulo = async (req, res) => {
           data: {
             stock_seguridad: stock_seguridad,
             inventario_maximo: inventario_maximo
+          },
+        })
+
+        await prisma.proveedorArticulo.update({
+          where: {
+            id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo,
+          },
+          data: {
+            cgi: cgi,
           },
         })
       }
