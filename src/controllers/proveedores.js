@@ -102,14 +102,18 @@ export const crearProveedor = async (req, res) => {
           const H = nuevoProveedorArticulo.articulo.costo_almacenamiento;
           //Calculo de lote optimo si el modelo es de lote fijo
           if (modelo_seleccionado === 'lote_fijo') {
-            const { Q, R } = await calcularLoteOptimoPuntoPedido(
-              nuevoProveedorArticulo
-            )
+            
 
             const stock_seguridad = calcularStockSeguridadLF(
               nivelServicioZ[nivel_servicio],
               nuevoProveedorArticulo.articulo.desviacion_est_dem,
               nuevoProveedorArticulo.demora_entrega
+            )
+
+
+            const { Q, R } = await calcularLoteOptimoPuntoPedido(
+              nuevoProveedorArticulo,
+              stock_seguridad
             )
 
             // Calculo CGI
@@ -121,6 +125,7 @@ export const crearProveedor = async (req, res) => {
               costo_almacenamiento,
               costo_pedido,
               costo_compra
+
             )
 
             await prisma.modeloInventario.update({

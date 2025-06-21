@@ -82,6 +82,7 @@ export const crearProveedorArticulo = async (req, res) => {
         nuevoProveedorArticulo
       )
 
+
       // Calculo Stock Seguridad
       const stock_seguridad = calcularStockSeguridadLF(
         nivelServicioZ[nivel_servicio],
@@ -89,6 +90,10 @@ export const crearProveedorArticulo = async (req, res) => {
         demora_entrega
       )
 
+
+      const { Q, R } = await calcularLoteOptimoPuntoPedido(
+        nuevoProveedorArticulo, stock_seguridad
+      )
       // Calculo CGI
       const costo_pedido = Q === 0 ? null : (D / Q) * S;
 
@@ -98,6 +103,7 @@ export const crearProveedorArticulo = async (req, res) => {
         costo_almacenamiento,
         costo_pedido,
         costo_compra
+
       )
 
       await prisma.modeloInventario.update({
@@ -364,6 +370,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
       if (
         proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio ||
         proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.costo_pedido !== proveedorArticuloActualizado.costo_pedido ||
         proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
       ) {
         modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadLF(
@@ -371,14 +378,10 @@ export const actualizarProveedorArticulo = async (req, res) => {
           proveedorArticuloActualizado.articulo.desviacion_est_dem,
           demora_entrega
         )
-      }
-      if (
-        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.costo_pedido !== proveedorArticuloActualizado.costo_pedido ||
-        proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
-      ) {
+
         const { Q, R } = await calcularLoteOptimoPuntoPedido(
-          proveedorArticuloActualizado
+          proveedorArticuloActualizado,
+          modeloInventarioUpdated.stock_seguridad
         )
         modeloInventarioUpdated.lote_optimo = Q
         modeloInventarioUpdated.punto_pedido = R
@@ -449,14 +452,6 @@ export const actualizarProveedorArticulo = async (req, res) => {
         )
       }
 
-      // Traer datos actuales del modelo inventario
-      const stock_seguridad = calcularStockSeguridadIF(
-        periodo_revision,
-        demora_entrega,
-        nivelServicioZ[nivel_servicio],
-        proveedorArticuloActualizado.articulo.desviacion_est_dem
-      )
-      modeloInventarioUpdated.stock_seguridad = stock_seguridad
 
       const modeloInventarioActual = await prisma.modeloInventario.findUnique({
         where: {

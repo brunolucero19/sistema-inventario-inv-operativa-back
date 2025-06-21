@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 import { validateArticulo } from '../validators/articulo.schema.js'
 import { estadosOC, nivelServicioZ } from '../utils/constants.js'
-import { calcularCGI, calcularInventarioMaximo, calcularStockSeguridadIF, calcularStockSeguridadLF } from '../utils/calculos.js'
+import { calcularCGI, calcularInventarioMaximo, calcularLoteOptimoPuntoPedido, calcularStockSeguridadIF, calcularStockSeguridadLF } from '../utils/calculos.js'=======
+
 
 const prisma = new PrismaClient()
 
@@ -102,7 +103,10 @@ export const modificarArticulo = async (req, res) => {
 
     //Actualizo el lote_optimo por cada modelo relacionado a cada proveedorArticulo relacionado al articulo modificado
     if (articuloOriginal.demanda_articulo !== articuloActualizado.demanda_articulo ||
-      articuloOriginal.costo_almacenamiento !== articuloActualizado.costo_almacenamiento) {
+      articuloOriginal.costo_almacenamiento !== articuloActualizado.costo_almacenamiento ||
+      articuloOriginal.desviacion_est_dem !== articuloActualizado.desviacion_est_dem
+    ) {
+
       const proveedoresArticulos = await prisma.proveedorArticulo.findMany({
         where: {
           id_articulo: articuloActualizado.id_articulo,
@@ -119,7 +123,10 @@ export const modificarArticulo = async (req, res) => {
         const nivel_servicio = proveedorArticulo.nivel_servicio;
         const demora_entrega = proveedorArticulo.demora_entrega;
 
+        const { demora_entrega, nivel_servicio } = proveedorArticulo
+        const desviacion_estandar = articuloActualizado.desviacion_est_dem
         const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], desviacion_estandar, demora_entrega);
+        const {Q, R} = await calcularLoteOptimoPuntoPedido(proveedorArticulo, stock_seguridad)
 
         const D = articuloActualizado.demanda_articulo;
         const S = proveedorArticulo.costo_pedido;
@@ -127,6 +134,7 @@ export const modificarArticulo = async (req, res) => {
         const C = proveedorArticulo.precio_unitario;
 
         const Q = Math.round(Math.sqrt((2 * D * S) / H))
+
 
         // Calculo CGI
         const costo_pedido = Q === 0 ? null : (D / Q) * S;
@@ -147,6 +155,7 @@ export const modificarArticulo = async (req, res) => {
           },
           data: {
             lote_optimo: Q,
+            punto_pedido: R,
             stock_seguridad: stock_seguridad
           },
         })
@@ -378,6 +387,81 @@ export const obtenerArticulosAreponer = async (_req, res) => {
     console.error(error)
     res.status(500).json({
       error: [{ message: 'Error al obtener Articulos a reponer' }],
+    })
+  }
+}
+
+//Artículos que el stock este por debajo del punto de pedido y no tenga una orden activa
+export const obtenerArticulosFaltantes = async (_req, res) => {
+
+  try {
+    const articulos = await prisma.articulo.findMany({
+      where: {
+        AND: [
+          {
+            proveedoresArticulo: {
+              some: {
+                es_predeterminado: true,
+              }
+            }
+          },
+          {
+            proveedoresArticulo: {
+              every: {
+                ordenesCompra: {
+                  none: {
+                    id_estado_orden_compra: {
+                      in: [estadosOC.pendiente, estadosOC.enviada]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+
+      include: {
+        proveedoresArticulo: {
+          where: {
+            es_predeterminado: true,
+          },
+          include: {
+            modeloInventario: true,
+            proveedor: true
+          }
+        }
+      },
+    })
+
+    const articulosFiltrados = articulos.filter(articulo => {
+      const proveedorArticulo = articulo.proveedoresArticulo.find(
+        pa => pa.es_predeterminado
+      )
+      if (!proveedorArticulo) return false
+
+      const stock = articulo.stock
+      const stock_seguridad = proveedorArticulo.modeloInventario.stock_seguridad
+
+      return stock < stock_seguridad
+    }).map(articulo => {
+      const proveedorArticulo = articulo.proveedoresArticulo.find(
+        pa => pa.es_predeterminado
+      )
+      return {
+        id_articulo: articulo.id_articulo,
+        descripcion: articulo.descripcion,
+        stock: articulo.stock,
+        stock_seguridad: proveedorArticulo.modeloInventario.stock_seguridad,
+        proveedor_predeterminado: proveedorArticulo.proveedor.nombre
+      }
+    })
+
+    res.status(200).json(articulosFiltrados)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: [{ message: 'Error al obtener Articulos faltantes' }],
     })
   }
 }
