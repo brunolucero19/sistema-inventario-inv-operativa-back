@@ -1,11 +1,17 @@
 import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
-export const calcularLoteOptimoPuntoPedido = async (proveedorArticulo) => {
+export const calcularLoteOptimoPuntoPedido = async (proveedorArticulo, stockSeguridad) => {
   const articulo = await prisma.articulo.findFirst({
     where: { id_articulo: proveedorArticulo.id_articulo },
   })
 
+  if (!stockSeguridad){
+    const modeloInventario = await prisma.modeloInventario.findFirst({
+      where: { id_proveedor_articulo: proveedorArticulo.id_proveedor_articulo },
+    })
+    stockSeguridad = modeloInventario.stock_seguridad
+  }
   //Calcular el lote óptimo (EOQ)
   const D = articulo.demanda_articulo
   const S = proveedorArticulo.costo_pedido
@@ -17,7 +23,7 @@ export const calcularLoteOptimoPuntoPedido = async (proveedorArticulo) => {
   const L = proveedorArticulo.demora_entrega
   const d = articulo.demanda_articulo / 365 // Demanda diaria asumiendo 365 días al año
 
-  const R = Math.round(d * L) // Punto de pedido
+  const R = Math.round(d * L + stockSeguridad) // Punto de pedido
   return { Q, R }
 }
 
