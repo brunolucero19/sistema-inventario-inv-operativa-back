@@ -7,7 +7,7 @@ import {
   calcularInventarioMaximo,
   calcularCostoCompra,
 } from '../utils/calculos.js'
-import { nivelServicioZ } from '../utils/constants.js'
+import { estadosOC, nivelServicioZ } from '../utils/constants.js'
 
 const prisma = new PrismaClient()
 
@@ -319,8 +319,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
     }
 
     // Actualizar el proveedor-artículo
-    const costo_compra =
-      proveedorArticuloExistente.articulo.demanda_articulo * precio_unitario
+    const costo_compra = proveedorArticuloExistente.articulo.demanda_articulo * precio_unitario
     const proveedorArticuloActualizado = await prisma.proveedorArticulo.update({
       where: {
         id_proveedor_articulo: proveedorArticuloExistente.id_proveedor_articulo,
@@ -354,8 +353,9 @@ export const actualizarProveedorArticulo = async (req, res) => {
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
       if (
-        proveedorArticuloExistente.nivel_servicio !==
-        proveedorArticuloActualizado.nivel_servicio
+        proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio ||
+        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
       ) {
         modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadLF(
           nivelServicioZ[nivel_servicio],
@@ -364,10 +364,9 @@ export const actualizarProveedorArticulo = async (req, res) => {
         )
       }
       if (
-        proveedorArticuloExistente.demora_entrega !==
-          proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.costo_pedido !==
-          proveedorArticuloActualizado.costo_pedido
+        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.costo_pedido !== proveedorArticuloActualizado.costo_pedido ||
+        proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
       ) {
         const { Q, R } = await calcularLoteOptimoPuntoPedido(
           proveedorArticuloActualizado
@@ -375,6 +374,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
         modeloInventarioUpdated.lote_optimo = Q
         modeloInventarioUpdated.punto_pedido = R
       }
+
 
       await prisma.modeloInventario.update({
         where: {
@@ -387,20 +387,19 @@ export const actualizarProveedorArticulo = async (req, res) => {
           fecha_ultima_revision: null, // No se usa en lote fijo
         },
       })
+
     }
 
     // Para modelo de intervalo fijo
     if (modelo_seleccionado === 'intervalo_fijo') {
       if (
-        proveedorArticuloExistente.periodo_revision !==
-          proveedorArticuloActualizado.periodo_revision ||
-        proveedorArticuloExistente.demora_entrega !==
-          proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.nivel_servicio !==
-          proveedorArticuloActualizado.nivel_servicio
+        proveedorArticuloExistente.periodo_revision !== proveedorArticuloActualizado.periodo_revision ||
+        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio ||
+        proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
       ) {
-        const desviacion_estandar =
-          proveedorArticuloActualizado.articulo.desviacion_est_dem
+        const desviacion_estandar = proveedorArticuloActualizado.articulo.desviacion_est_dem
+
         modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadIF(
           periodo_revision,
           demora_entrega,
@@ -409,21 +408,20 @@ export const actualizarProveedorArticulo = async (req, res) => {
         )
       }
       if (
-        proveedorArticuloExistente.periodo_revision !==
-          proveedorArticuloActualizado.periodo_revision ||
-        proveedorArticuloExistente.demora_entrega !==
-          proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.nivel_servicio !==
-          proveedorArticuloActualizado.nivel_servicio
+        proveedorArticuloExistente.periodo_revision !== proveedorArticuloActualizado.periodo_revision ||
+        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio ||
+        proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
       ) {
         const demanda_diaria =
           proveedorArticuloActualizado.articulo.demanda_articulo / 365
+
         modeloInventarioUpdated.inventario_maximo = calcularInventarioMaximo(
           demanda_diaria,
           periodo_revision,
           demora_entrega,
           nivelServicioZ[nivel_servicio],
-          desviacion_estandar
+          proveedorArticuloActualizado.articulo.desviacion_est_dem
         )
       }
 
@@ -432,8 +430,10 @@ export const actualizarProveedorArticulo = async (req, res) => {
         periodo_revision,
         demora_entrega,
         nivelServicioZ[nivel_servicio],
-        desvEstDem.desviacion_est_dem
+        proveedorArticuloActualizado.articulo.desviacion_est_dem
       )
+      modeloInventarioUpdated.stock_seguridad = stock_seguridad
+
       const modeloInventarioActual = await prisma.modeloInventario.findUnique({
         where: {
           id_proveedor_articulo:
@@ -557,6 +557,83 @@ export const obtenerCGIPorArticulo = async (req, res) => {
     console.error(error)
     res.status(500).json({
       error: [{ message: 'Error al obtener CGI por articulo' }],
+    })
+  }
+}
+
+//Proveedor-artículo que el stock este por debajo del punto de pedido y no tenga una orden activa
+export const obtenerProveedorArticuloAreponner = async (_req, res) => {
+
+  try {
+    const articulos = await prisma.articulo.findMany({
+      where: {
+        AND: [
+          {
+            proveedoresArticulo: {
+              some: {
+                es_predeterminado: true,
+                modelo_seleccionado: "lote_fijo",
+              }
+            }
+          },
+          {
+            proveedoresArticulo: {
+              every: {
+                ordenesCompra: {
+                  none: {
+                    id_estado_orden_compra: {
+                      in: [estadosOC.pendiente, estadosOC.enviada]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+
+      include: {
+        proveedoresArticulo: {
+          where: {
+            es_predeterminado: true,
+            modelo_seleccionado: 'lote_fijo',
+          },
+          include: {
+            modeloInventario: true,
+            proveedor: true
+          }
+        }
+      },
+    })
+
+    const articulosFiltrados = articulos.filter(articulo => {
+      const proveedorArticulo = articulo.proveedoresArticulo.find(
+        pa => pa.es_predeterminado && pa.modelo_seleccionado === 'lote_fijo'
+      )
+      if (!proveedorArticulo) return false
+
+      const stock = articulo.stock
+      const puntoPedido = proveedorArticulo.modeloInventario.punto_pedido
+
+      return stock < puntoPedido
+    }).map(articulo => {
+      const proveedorArticulo = articulo.proveedoresArticulo.find(
+        pa => pa.es_predeterminado && pa.modelo_seleccionado === 'lote_fijo'
+      )
+      return {
+        id_articulo: articulo.id_articulo,
+        descripcion: articulo.descripcion,
+        stock: articulo.stock,
+        punto_pedido: proveedorArticulo.modeloInventario.punto_pedido,
+        proveedor: proveedorArticulo.proveedor.nombre
+      }
+    })
+
+    res.status(200).json(articulosFiltrados)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: [{ message: 'Error al obtener Articulos a reponer' }],
     })
   }
 }
