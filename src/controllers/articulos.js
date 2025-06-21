@@ -252,3 +252,80 @@ export const eliminarArticulo = async (req, res) => {
     res.status(500).json({ error: 'Error al eliminar el artículo' })
   }
 }
+
+//Artículos que el stock este por debajo del punto de pedido y no tenga una orden activa
+export const obtenerArticulosAreponer = async (_req, res) => {
+
+  try {
+    const articulos = await prisma.articulo.findMany({
+      where: {
+        AND: [
+          {
+            proveedoresArticulo: {
+              some: {
+                es_predeterminado: true,
+                modelo_seleccionado: "lote_fijo",
+              }
+            }
+          },
+          {
+            proveedoresArticulo: {
+              every: {
+                ordenesCompra: {
+                  none: {
+                    id_estado_orden_compra: {
+                      in: [estadosOC.pendiente, estadosOC.enviada]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+
+      include: {
+        proveedoresArticulo: {
+          where: {
+            es_predeterminado: true,
+            modelo_seleccionado: 'lote_fijo',
+          },
+          include: {
+            modeloInventario: true,
+            proveedor: true
+          }
+        }
+      },
+    })
+
+    const articulosFiltrados = articulos.filter(articulo => {
+      const proveedorArticulo = articulo.proveedoresArticulo.find(
+        pa => pa.es_predeterminado && pa.modelo_seleccionado === 'lote_fijo'
+      )
+      if (!proveedorArticulo) return false
+
+      const stock = articulo.stock
+      const puntoPedido = proveedorArticulo.modeloInventario.punto_pedido
+
+      return stock < puntoPedido
+    }).map(articulo => {
+      const proveedorArticulo = articulo.proveedoresArticulo.find(
+        pa => pa.es_predeterminado && pa.modelo_seleccionado === 'lote_fijo'
+      )
+      return {
+        id_articulo: articulo.id_articulo,
+        descripcion: articulo.descripcion,
+        stock: articulo.stock,
+        punto_pedido: proveedorArticulo.modeloInventario.punto_pedido,
+        proveedor_predeterminado: proveedorArticulo.proveedor.nombre
+      }
+    })
+
+    res.status(200).json(articulosFiltrados)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      error: [{ message: 'Error al obtener Articulos a reponer' }],
+    })
+  }
+}

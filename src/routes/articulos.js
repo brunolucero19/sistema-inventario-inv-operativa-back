@@ -1,5 +1,5 @@
 import express from 'express'
-import { crearArticulo, obtenerArticulos, obtenerArticulo, modificarArticulo, eliminarArticulo } from '../controllers/articulos.js'
+import { crearArticulo, obtenerArticulos, obtenerArticulo, modificarArticulo, eliminarArticulo, obtenerArticulosAreponer } from '../controllers/articulos.js'
 
 const router = express.Router()
 
@@ -12,6 +12,8 @@ router.get('/leer-articulo/:id', obtenerArticulo)
 router.patch("/modificar-articulo/:id", modificarArticulo)
 
 router.delete('/eliminar-articulo/:id', eliminarArticulo)
+
+router.get('/obtener-proveedores-articulos-a-reponer', obtenerArticulosAreponer)
 
 // router.put('/actualizar-articulo/:id', actualizarArticulo)
 
