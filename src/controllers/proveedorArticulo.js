@@ -77,12 +77,6 @@ export const crearProveedorArticulo = async (req, res) => {
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
 
-      // Calculo Lote Optimo
-      const { Q, R } = await calcularLoteOptimoPuntoPedido(
-        nuevoProveedorArticulo
-      )
-
-
       // Calculo Stock Seguridad
       const stock_seguridad = calcularStockSeguridadLF(
         nivelServicioZ[nivel_servicio],
@@ -90,7 +84,7 @@ export const crearProveedorArticulo = async (req, res) => {
         demora_entrega
       )
 
-
+      // Calculo Lote Optimo y Punto de Pedido
       const { Q, R } = await calcularLoteOptimoPuntoPedido(
         nuevoProveedorArticulo, stock_seguridad
       )
@@ -221,11 +215,7 @@ export const obtenerProveedoresPorArticulo = async (req, res) => {
       include: {
         proveedor: true,
         articulo: true,
-        modeloInventario: {
-          select: {
-            lote_optimo: true,
-          },
-        },
+        modeloInventario: true
       },
     })
 

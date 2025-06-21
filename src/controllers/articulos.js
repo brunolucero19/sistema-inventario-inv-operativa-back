@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { validateArticulo } from '../validators/articulo.schema.js'
 import { estadosOC, nivelServicioZ } from '../utils/constants.js'
-import { calcularCGI, calcularInventarioMaximo, calcularLoteOptimoPuntoPedido, calcularStockSeguridadIF, calcularStockSeguridadLF } from '../utils/calculos.js'=======
+import { calcularCGI, calcularInventarioMaximo, calcularLoteOptimoPuntoPedido, calcularStockSeguridadIF, calcularStockSeguridadLF } from '../utils/calculos.js'
 
 
 const prisma = new PrismaClient()
@@ -119,22 +119,15 @@ export const modificarArticulo = async (req, res) => {
 
       for (const proveedorArticulo of proveedoresArticulos) {
 
-        const desviacion_estandar = articuloActualizado.desviacion_est_dem;
-        const nivel_servicio = proveedorArticulo.nivel_servicio;
-        const demora_entrega = proveedorArticulo.demora_entrega;
-
         const { demora_entrega, nivel_servicio } = proveedorArticulo
         const desviacion_estandar = articuloActualizado.desviacion_est_dem
         const stock_seguridad = calcularStockSeguridadLF(nivelServicioZ[nivel_servicio], desviacion_estandar, demora_entrega);
-        const {Q, R} = await calcularLoteOptimoPuntoPedido(proveedorArticulo, stock_seguridad)
+        const { Q, R } = await calcularLoteOptimoPuntoPedido(proveedorArticulo, stock_seguridad)
 
         const D = articuloActualizado.demanda_articulo;
         const S = proveedorArticulo.costo_pedido;
         const H = articuloActualizado.costo_almacenamiento;
         const C = proveedorArticulo.precio_unitario;
-
-        const Q = Math.round(Math.sqrt((2 * D * S) / H))
-
 
         // Calculo CGI
         const costo_pedido = Q === 0 ? null : (D / Q) * S;
@@ -268,7 +261,7 @@ export const eliminarArticulo = async (req, res) => {
 
     const ordenPendienteOEnviada = await prisma.ordenCompra.findFirst({
       where: {
-        or: [
+        OR: [
           { id_estado_orden_compra: estadosOC.pendiente },
           { id_estado_orden_compra: estadosOC.enviada },
         ],
@@ -278,7 +271,7 @@ export const eliminarArticulo = async (req, res) => {
       },
     })
 
-    if (ordenPendiente) {
+    if (ordenPendienteOEnviada) {
       return res.status(400).json({
         error:
           'No se puede eliminar el artículo porque está en una orden de compra pendiente o enviada.',
@@ -321,6 +314,9 @@ export const obtenerArticulosAreponer = async (_req, res) => {
     const articulos = await prisma.articulo.findMany({
       where: {
         AND: [
+          {
+            fechaBaja: null
+          },
           {
             proveedoresArticulo: {
               some: {
@@ -398,6 +394,9 @@ export const obtenerArticulosFaltantes = async (_req, res) => {
     const articulos = await prisma.articulo.findMany({
       where: {
         AND: [
+          {
+            fechaBaja: null
+          },
           {
             proveedoresArticulo: {
               some: {
