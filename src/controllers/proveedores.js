@@ -57,12 +57,6 @@ export const crearProveedor = async (req, res) => {
             art.demanda_articulo
           )
 
-          const cgi = calcularCGI(
-            art.costo_almacenamiento,
-            costo_pedido,
-            costo_compra
-          )
-
           const nuevoProveedorArticulo = await prisma.proveedorArticulo.create({
             data: {
               id_proveedor: nuevoProveedor.id_proveedor,
@@ -72,8 +66,7 @@ export const crearProveedor = async (req, res) => {
               costo_pedido,
               costo_compra,
               modelo_seleccionado,
-              es_predeterminado,
-              cgi,
+              es_predeterminado,              
               nivel_servicio,
             },
             include: {
@@ -102,6 +95,8 @@ export const crearProveedor = async (req, res) => {
             },
           })
 
+          let cgi;
+          
           //Calculo de lote optimo si el modelo es de lote fijo
           if (modelo_seleccionado === 'lote_fijo') {
             const { Q, R } = await calcularLoteOptimoPuntoPedido(
@@ -112,6 +107,20 @@ export const crearProveedor = async (req, res) => {
               nivelServicioZ[nivel_servicio],
               nuevoProveedorArticulo.articulo.desviacion_est_dem,
               nuevoProveedorArticulo.demora_entrega
+            )
+
+            // Calculo CGI
+            const D = nuevoProveedorArticulo.articulo.demanda_articulo;
+            const S = nuevoProveedorArticulo.costo_pedido;
+            const costo_pedido = (D / Q) * S;
+
+            const H = nuevoProveedorArticulo.articulo.costo_almacenamiento;
+            const costo_almacenamiento = (Q / 2) * H;
+            
+            cgi = calcularCGI(
+              costo_almacenamiento,
+              costo_pedido,
+              costo_compra
             )
 
             await prisma.modeloInventario.update({
@@ -166,6 +175,17 @@ export const crearProveedor = async (req, res) => {
               },
             })
           }
+
+          // Actualizar CGI
+          await prisma.proveedorArticulo.update({
+            where: {
+              id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo,
+            },
+            data: {
+              cgi: cgi,
+            },
+          })
+
         }
       }
       return nuevoProveedor

@@ -5,6 +5,7 @@ import {
   calcularStockSeguridadLF,
   calcularStockSeguridadIF,
   calcularInventarioMaximo,
+  calcularCostoCompra,
 } from '../utils/calculos.js'
 import { nivelServicioZ } from '../utils/constants.js'
 
@@ -65,16 +66,37 @@ export const crearProveedorArticulo = async (req, res) => {
       },
     })
 
+    let cgi = 0
+    
+    const D = nuevoProveedorArticulo.articulo.demanda_articulo;
+    const S = nuevoProveedorArticulo.costo_pedido;
+    const H = nuevoProveedorArticulo.articulo.costo_almacenamiento;
+    const T = periodo_revision / 365;
+
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
+
+      // Calculo Lote Optimo
       const { Q, R } = await calcularLoteOptimoPuntoPedido(
         nuevoProveedorArticulo
       )
 
+      // Calculo Stock Seguridad
       const stock_seguridad = calcularStockSeguridadLF(
         nivelServicioZ[nivel_servicio],
         nuevoProveedorArticulo.articulo.desviacion_est_dem,
         demora_entrega
+      )
+      
+      // Calculo CGI
+      const costo_pedido = (D / Q) * S;
+
+      const costo_almacenamiento = (Q / 2) * H;
+      
+      cgi = calcularCGI(
+        costo_almacenamiento,
+        costo_pedido,
+        costo_compra
       )
 
       await prisma.modeloInventario.update({
@@ -95,6 +117,8 @@ export const crearProveedorArticulo = async (req, res) => {
     if (modelo_seleccionado === 'intervalo_fijo') {
       const desviacion_estandar =
         nuevoProveedorArticulo.articulo.desviacion_est_dem
+
+      // Calculo Stock Seguridad
       const stock_seguridad = calcularStockSeguridadIF(
         periodo_revision,
         demora_entrega,
@@ -102,6 +126,7 @@ export const crearProveedorArticulo = async (req, res) => {
         desviacion_estandar
       )
 
+      // Calculo Inventario Maximo
       const demanda_diaria =
         nuevoProveedorArticulo.articulo.demanda_articulo / 365
 
@@ -111,6 +136,17 @@ export const crearProveedorArticulo = async (req, res) => {
         demora_entrega,
         nivelServicioZ[nivel_servicio],
         desviacion_estandar
+      )
+
+      // Calculo CGI      
+      const costo_pedido = (1 / T) * S;
+
+      const costo_almacenamiento = ((D * T) / 2) * H;
+      
+      cgi = calcularCGI(
+        costo_almacenamiento,
+        costo_pedido,
+        costo_compra
       )
 
       await prisma.modeloInventario.update({
@@ -127,6 +163,16 @@ export const crearProveedorArticulo = async (req, res) => {
         },
       })
     }
+
+    // Actualizar CGI
+    await prisma.proveedorArticulo.update({
+      where: {
+        id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo,
+      },
+      data: {
+        cgi: cgi,
+      },
+    })
 
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
     if (es_predeterminado) {
