@@ -261,15 +261,21 @@ export const eliminarProveedor = async (req, res) => {
     }
 
     // Verificar que el proveedor no sea el predeterminado de al menos un artículo
-    const proveedorArticulo = await prisma.proveedorArticulo.findFirst({
+    const proveedorArticulo = await prisma.proveedorArticulo.findMany({
       where: {
         id_proveedor: +id_proveedor,
         es_predeterminado: true,
       },
+      include: {
+        articulo: true,
+      },
     })
-    if (proveedorArticulo) {
+    if (proveedorArticulo.length > 0) {
+      const articulos = proveedorArticulo
+        .map((pa) => pa.articulo.descripcion)
+        .join(', ')
       throw new Error(
-        'No se puede eliminar el proveedor porque es el predeterminado de al menos un artículo.'
+        `No se puede eliminar el proveedor porque es el predeterminado de los artículos: ${articulos}`
       )
     }
 
@@ -288,8 +294,23 @@ export const eliminarProveedor = async (req, res) => {
 
     if (ordenPendiente) {
       throw new Error(
-        'No se puede eliminar el proveedor porque tiene órdenes de compra pendientes.'
+        'No se puede eliminar el proveedor porque tiene órdenes de compra pendientes o enviadas.'
       )
+    }
+
+    // Eliminar relaciones proveedor-artículo y modelo inventario
+    const proveedorArticulos = await prisma.proveedorArticulo.findMany({
+      where: { id_proveedor: +id_proveedor },
+    })
+    if (proveedorArticulos.length > 0) {
+      for (const pa of proveedorArticulos) {
+        await prisma.modeloInventario.deleteMany({
+          where: { id_proveedor_articulo: pa.id_proveedor_articulo },
+        })
+      }
+      await prisma.proveedorArticulo.deleteMany({
+        where: { id_proveedor: +id_proveedor },
+      })
     }
 
     // Marcar el proveedor como eliminado
