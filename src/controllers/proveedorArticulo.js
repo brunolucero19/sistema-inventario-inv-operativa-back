@@ -9,7 +9,7 @@ import {
   calcularCGI,
   redondearA2Decimales,
 } from '../utils/calculos.js'
-import { estadosOC, nivelServicioZ } from '../utils/constants.js'
+import { nivelServicioZ } from '../utils/constants.js'
 
 const prisma = new PrismaClient()
 
