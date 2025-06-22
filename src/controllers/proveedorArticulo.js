@@ -419,7 +419,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
     if (modelo_seleccionado === 'intervalo_fijo') {
       if (
         proveedorArticuloExistente.modeloInventario.periodo_revision !==
-          proveedorArticuloActualizado.modeloInventario.periodo_revision ||
+          periodo_revision ||
         proveedorArticuloExistente.demora_entrega !==
           proveedorArticuloActualizado.demora_entrega ||
         proveedorArticuloExistente.nivel_servicio !==

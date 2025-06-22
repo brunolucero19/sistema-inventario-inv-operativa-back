@@ -415,7 +415,7 @@ export const obtenerArticulosAreponer = async (_req, res) => {
         const stock = articulo.stock
         const puntoPedido = proveedorArticulo.modeloInventario.punto_pedido
 
-        return stock < puntoPedido
+        return stock <= puntoPedido
       })
       .map((articulo) => {
         const proveedorArticulo = articulo.proveedoresArticulo.find(
