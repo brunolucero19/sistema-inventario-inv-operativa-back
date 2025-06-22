@@ -33,11 +33,28 @@ export const crearProveedorArticulo = async (req, res) => {
     periodo_revision,
   } = result.data
 
+  let es_proveedor_predeterminado = es_predeterminado
+
   try {
     // Crear relación proveedor-artículo
     const articulo = await prisma.articulo.findUnique({
       where: { id_articulo },
     })
+
+    // Buscar si existe un proveedor-articulo para ese artículo, si no existe, debe ser el predeterminado automáticamente
+    const proveedorArticuloExistente = await prisma.proveedorArticulo.findFirst(
+      {
+        where: {
+          id_articulo,
+          es_predeterminado: true,
+        },
+      }
+    )
+    let predeterminado_por_defecto = false
+    if (!proveedorArticuloExistente) {
+      es_proveedor_predeterminado = true
+      predeterminado_por_defecto = true
+    }
 
     const costo_compra = calcularCostoCompra(
       precio_unitario,
@@ -54,7 +71,7 @@ export const crearProveedorArticulo = async (req, res) => {
         demora_entrega,
         nivel_servicio,
         modelo_seleccionado,
-        es_predeterminado,
+        es_predeterminado: es_proveedor_predeterminado,
       },
       include: {
         proveedor: true,
@@ -70,13 +87,12 @@ export const crearProveedorArticulo = async (req, res) => {
 
     let cgi = 0
 
-    const D = nuevoProveedorArticulo.articulo.demanda_articulo;
-    const S = nuevoProveedorArticulo.costo_pedido;
-    const H = nuevoProveedorArticulo.articulo.costo_almacenamiento;
+    const D = nuevoProveedorArticulo.articulo.demanda_articulo
+    const S = nuevoProveedorArticulo.costo_pedido
+    const H = nuevoProveedorArticulo.articulo.costo_almacenamiento
 
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
-
       // Calculo Stock Seguridad
       const stock_seguridad = calcularStockSeguridadLF(
         nivelServicioZ[nivel_servicio],
@@ -86,19 +102,15 @@ export const crearProveedorArticulo = async (req, res) => {
 
       // Calculo Lote Optimo y Punto de Pedido
       const { Q, R } = await calcularLoteOptimoPuntoPedido(
-        nuevoProveedorArticulo, stock_seguridad
+        nuevoProveedorArticulo,
+        stock_seguridad
       )
       // Calculo CGI
-      const costo_pedido = Q === 0 ? null : (D / Q) * S;
+      const costo_pedido = Q === 0 ? null : (D / Q) * S
 
-      const costo_almacenamiento = (Q / 2) * H;
+      const costo_almacenamiento = (Q / 2) * H
 
-      cgi = calcularCGI(
-        costo_almacenamiento,
-        costo_pedido,
-        costo_compra
-
-      )
+      cgi = calcularCGI(costo_almacenamiento, costo_pedido, costo_compra)
 
       await prisma.modeloInventario.update({
         where: {
@@ -128,7 +140,8 @@ export const crearProveedorArticulo = async (req, res) => {
       )
 
       // Calculo Inventario Maximo
-      const demanda_diaria = nuevoProveedorArticulo.articulo.demanda_articulo / 365
+      const demanda_diaria =
+        nuevoProveedorArticulo.articulo.demanda_articulo / 365
 
       const inventario_maximo = calcularInventarioMaximo(
         demanda_diaria,
@@ -139,16 +152,12 @@ export const crearProveedorArticulo = async (req, res) => {
       )
 
       // Calculo CGI
-      const T = periodo_revision / 365;
-      const costo_pedido = T === 0 ? null : (1 / T) * S;
+      const T = periodo_revision / 365
+      const costo_pedido = T === 0 ? null : (1 / T) * S
 
-      const costo_almacenamiento = ((D * T) / 2) * H;
+      const costo_almacenamiento = ((D * T) / 2) * H
 
-      cgi = calcularCGI(
-        costo_almacenamiento,
-        costo_pedido,
-        costo_compra
-      )
+      cgi = calcularCGI(costo_almacenamiento, costo_pedido, costo_compra)
 
       await prisma.modeloInventario.update({
         where: {
@@ -189,7 +198,11 @@ export const crearProveedorArticulo = async (req, res) => {
       })
     }
 
-    res.status(201).json(nuevoProveedorArticulo)
+    res.status(201).json({
+      message: `Proveedor-artículo ${nuevoProveedorArticulo.id_proveedor_articulo} creado correctamente.`,
+      proveedorArticulo: nuevoProveedorArticulo,
+      predeterminado_por_defecto,
+    })
   } catch (error) {
     console.log(error.message)
     if (error.code === 'P2002') {
@@ -215,7 +228,7 @@ export const obtenerProveedoresPorArticulo = async (req, res) => {
       include: {
         proveedor: true,
         articulo: true,
-        modeloInventario: true
+        modeloInventario: true,
       },
     })
 
@@ -285,7 +298,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
         },
         include: {
           articulo: true,
-          modeloInventario: true
+          modeloInventario: true,
         },
       }
     )
@@ -316,7 +329,8 @@ export const actualizarProveedorArticulo = async (req, res) => {
     }
 
     // Actualizar el proveedor-artículo
-    const costo_compra = proveedorArticuloExistente.articulo.demanda_articulo * precio_unitario
+    const costo_compra =
+      proveedorArticuloExistente.articulo.demanda_articulo * precio_unitario
     const proveedorArticuloActualizado = await prisma.proveedorArticulo.update({
       where: {
         id_proveedor_articulo: proveedorArticuloExistente.id_proveedor_articulo,
@@ -332,7 +346,7 @@ export const actualizarProveedorArticulo = async (req, res) => {
       },
       include: {
         articulo: true,
-        modeloInventario: true
+        modeloInventario: true,
       },
     })
     // Si es predeterminado, buscar si existe algún articulo-proveedor que ya tenga un proveedor predeterminado y setearlo a false
@@ -349,19 +363,23 @@ export const actualizarProveedorArticulo = async (req, res) => {
 
     const modeloInventarioUpdated = {}
 
-    let cgi = proveedorArticuloActualizado.cgi;
+    let cgi = proveedorArticuloActualizado.cgi
 
-    const D = proveedorArticuloActualizado.articulo.demanda_articulo;
-    const H = proveedorArticuloActualizado.articulo.costo_almacenamiento;
-    const S = proveedorArticuloActualizado.costo_pedido;
+    const D = proveedorArticuloActualizado.articulo.demanda_articulo
+    const H = proveedorArticuloActualizado.articulo.costo_almacenamiento
+    const S = proveedorArticuloActualizado.costo_pedido
 
     //Calculo de lote optimo si el modelo es de lote fijo
     if (modelo_seleccionado === 'lote_fijo') {
       if (
-        proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio ||
-        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.costo_pedido !== proveedorArticuloActualizado.costo_pedido ||
-        proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
+        proveedorArticuloExistente.nivel_servicio !==
+          proveedorArticuloActualizado.nivel_servicio ||
+        proveedorArticuloExistente.demora_entrega !==
+          proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.costo_pedido !==
+          proveedorArticuloActualizado.costo_pedido ||
+        proveedorArticuloExistente.modelo_seleccionado !==
+          proveedorArticuloActualizado.modelo_seleccionado
       ) {
         modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadLF(
           nivelServicioZ[nivel_servicio],
@@ -377,17 +395,12 @@ export const actualizarProveedorArticulo = async (req, res) => {
         modeloInventarioUpdated.punto_pedido = R
 
         // Calculo CGI
-        const costo_pedido = Q === 0 ? null : (D / Q) * S;
+        const costo_pedido = Q === 0 ? null : (D / Q) * S
 
-        const costo_almacenamiento = (Q / 2) * H;
+        const costo_almacenamiento = (Q / 2) * H
 
-        cgi = calcularCGI(
-          costo_almacenamiento,
-          costo_pedido,
-          costo_compra
-        )
+        cgi = calcularCGI(costo_almacenamiento, costo_pedido, costo_compra)
       }
-
 
       await prisma.modeloInventario.update({
         where: {
@@ -400,18 +413,22 @@ export const actualizarProveedorArticulo = async (req, res) => {
           fecha_ultima_revision: null, // No se usa en lote fijo
         },
       })
-
     }
 
     // Para modelo de intervalo fijo
     if (modelo_seleccionado === 'intervalo_fijo') {
       if (
-        proveedorArticuloExistente.modeloInventario.periodo_revision !== proveedorArticuloActualizado.modeloInventario.periodo_revision ||
-        proveedorArticuloExistente.demora_entrega !== proveedorArticuloActualizado.demora_entrega ||
-        proveedorArticuloExistente.nivel_servicio !== proveedorArticuloActualizado.nivel_servicio ||
-        proveedorArticuloExistente.modelo_seleccionado !== proveedorArticuloActualizado.modelo_seleccionado
+        proveedorArticuloExistente.modeloInventario.periodo_revision !==
+          proveedorArticuloActualizado.modeloInventario.periodo_revision ||
+        proveedorArticuloExistente.demora_entrega !==
+          proveedorArticuloActualizado.demora_entrega ||
+        proveedorArticuloExistente.nivel_servicio !==
+          proveedorArticuloActualizado.nivel_servicio ||
+        proveedorArticuloExistente.modelo_seleccionado !==
+          proveedorArticuloActualizado.modelo_seleccionado
       ) {
-        const desviacion_estandar = proveedorArticuloActualizado.articulo.desviacion_est_dem
+        const desviacion_estandar =
+          proveedorArticuloActualizado.articulo.desviacion_est_dem
 
         modeloInventarioUpdated.stock_seguridad = calcularStockSeguridadIF(
           periodo_revision,
@@ -419,7 +436,8 @@ export const actualizarProveedorArticulo = async (req, res) => {
           nivelServicioZ[nivel_servicio],
           desviacion_estandar
         )
-        const demanda_diaria = proveedorArticuloActualizado.articulo.demanda_articulo / 365
+        const demanda_diaria =
+          proveedorArticuloActualizado.articulo.demanda_articulo / 365
 
         modeloInventarioUpdated.inventario_maximo = calcularInventarioMaximo(
           demanda_diaria,
@@ -430,18 +448,13 @@ export const actualizarProveedorArticulo = async (req, res) => {
         )
 
         // Calculo CGI
-        const T = proveedorArticuloActualizado.periodo_revision / 365;
-        const costo_pedido = T === 0 ? null : (1 / T) * S;
+        const T = proveedorArticuloActualizado.periodo_revision / 365
+        const costo_pedido = T === 0 ? null : (1 / T) * S
 
-        const costo_almacenamiento = ((D * T) / 2) * H;
+        const costo_almacenamiento = ((D * T) / 2) * H
 
-        cgi = calcularCGI(
-          costo_almacenamiento,
-          costo_pedido,
-          costo_compra
-        )
+        cgi = calcularCGI(costo_almacenamiento, costo_pedido, costo_compra)
       }
-
 
       const modeloInventarioActual = await prisma.modeloInventario.findUnique({
         where: {
@@ -579,39 +592,39 @@ export const obtenerCGIPorArticulo = async (req, res) => {
           select: {
             demanda_articulo: true,
             costo_almacenamiento: true,
-          }
+          },
         },
         modeloInventario: {
           select: {
             lote_optimo: true,
-            periodo_revision: true
-          }
+            periodo_revision: true,
+          },
         },
       },
     })
 
     const resultados = data.map((pa) => {
-      const D = pa.articulo.demanda_articulo;
-      const H = pa.articulo.costo_almacenamiento;
-      const C = pa.precio_unitario;
-      const S = pa.costo_pedido;
+      const D = pa.articulo.demanda_articulo
+      const H = pa.articulo.costo_almacenamiento
+      const C = pa.precio_unitario
+      const S = pa.costo_pedido
 
-      const costo_compra = D * C;
+      const costo_compra = D * C
 
-      let costo_pedido = 0;
-      let costo_almacenamiento = 0;
+      let costo_pedido = 0
+      let costo_almacenamiento = 0
 
       if (pa.modelo_seleccionado === 'lote_fijo') {
-        const Q = pa.modeloInventario.lote_optimo;
-        costo_pedido = Q === 0 ? null : (D / Q) * S;
-        costo_almacenamiento = (Q / 2) * H;
+        const Q = pa.modeloInventario.lote_optimo
+        costo_pedido = Q === 0 ? null : (D / Q) * S
+        costo_almacenamiento = (Q / 2) * H
       } else if (pa.modelo_seleccionado === 'intervalo_fijo') {
-        const T = pa.modeloInventario.periodo_revision / 365;
-        costo_pedido = T === 0 ? null : (1 / T) * S;
-        costo_almacenamiento = ((D * T) / 2) * H;
+        const T = pa.modeloInventario.periodo_revision / 365
+        costo_pedido = T === 0 ? null : (1 / T) * S
+        costo_almacenamiento = ((D * T) / 2) * H
       }
 
-      const cgi = costo_compra + costo_pedido + costo_almacenamiento;
+      const cgi = costo_compra + costo_pedido + costo_almacenamiento
 
       return {
         proveedor: pa.proveedor.nombre,
@@ -619,10 +632,10 @@ export const obtenerCGIPorArticulo = async (req, res) => {
         costo_pedido: redondearA2Decimales(costo_pedido),
         costo_almacenamiento: redondearA2Decimales(costo_almacenamiento),
         cgi: redondearA2Decimales(cgi),
-      };
-    });
+      }
+    })
 
-    res.status(200).json(resultados);
+    res.status(200).json(resultados)
   } catch (error) {
     console.error(error)
     res.status(500).json({
@@ -630,4 +643,3 @@ export const obtenerCGIPorArticulo = async (req, res) => {
     })
   }
 }
-

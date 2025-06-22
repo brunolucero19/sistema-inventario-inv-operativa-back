@@ -22,8 +22,9 @@ export const crearProveedor = async (req, res) => {
   const { nombre, apellido, email, telefono, articulos } = result.data
 
   try {
+    let articulos_predeterminado_por_defecto = ''
     const resultado = await prisma.$transaction(async (tx) => {
-      const nuevoProveedor = await prisma.proveedor.create({
+      const nuevoProveedor = await tx.proveedor.create({
         data: {
           nombre,
           apellido,
@@ -35,7 +36,7 @@ export const crearProveedor = async (req, res) => {
       // Asociar artículos al proveedor
       if (articulos && articulos.length > 0) {
         for (const articulo of articulos) {
-          const art = await prisma.articulo.findUnique({
+          const art = await tx.articulo.findUnique({
             where: {
               id_articulo: articulo.id_articulo,
             },
@@ -52,12 +53,27 @@ export const crearProveedor = async (req, res) => {
             nivel_servicio,
           } = articulo
 
+          let es_proveedor_predeterminado = es_predeterminado
+
+          // Buscar si existe un proveedor-articulo para ese artículo, si no existe, debe ser el predeterminado automáticamente
+          const proveedorArticuloExistente =
+            await tx.proveedorArticulo.findFirst({
+              where: {
+                id_articulo: articulo.id_articulo,
+                es_predeterminado: true,
+              },
+            })
+          if (!proveedorArticuloExistente) {
+            es_proveedor_predeterminado = true
+            articulos_predeterminado_por_defecto += `${art.descripcion}, `
+          }
+
           const costo_compra = calcularCostoCompra(
             precio_unitario,
             art.demanda_articulo
           )
 
-          const nuevoProveedorArticulo = await prisma.proveedorArticulo.create({
+          const nuevoProveedorArticulo = await tx.proveedorArticulo.create({
             data: {
               id_proveedor: nuevoProveedor.id_proveedor,
               id_articulo,
@@ -66,7 +82,7 @@ export const crearProveedor = async (req, res) => {
               costo_pedido,
               costo_compra,
               modelo_seleccionado,
-              es_predeterminado,
+              es_predeterminado: es_proveedor_predeterminado,
               nivel_servicio,
             },
             include: {
@@ -77,7 +93,7 @@ export const crearProveedor = async (req, res) => {
 
           // Setear en false a los demás proveedores del artículo si el nuevo es predeterminado
           if (es_predeterminado) {
-            await prisma.proveedorArticulo.updateMany({
+            await tx.proveedorArticulo.updateMany({
               where: {
                 id_articulo: id_articulo,
                 id_proveedor: {
@@ -88,28 +104,25 @@ export const crearProveedor = async (req, res) => {
             })
           }
 
-          const modeloInventarioNuevo = await prisma.modeloInventario.create({
+          const modeloInventarioNuevo = await tx.modeloInventario.create({
             data: {
               id_proveedor_articulo:
                 nuevoProveedorArticulo.id_proveedor_articulo,
             },
           })
 
-          let cgi = 0;
+          let cgi = 0
 
-          const D = nuevoProveedorArticulo.articulo.demanda_articulo;
-          const S = nuevoProveedorArticulo.costo_pedido;
-          const H = nuevoProveedorArticulo.articulo.costo_almacenamiento;
+          const D = nuevoProveedorArticulo.articulo.demanda_articulo
+          const S = nuevoProveedorArticulo.costo_pedido
+          const H = nuevoProveedorArticulo.articulo.costo_almacenamiento
           //Calculo de lote optimo si el modelo es de lote fijo
           if (modelo_seleccionado === 'lote_fijo') {
-            
-
             const stock_seguridad = calcularStockSeguridadLF(
               nivelServicioZ[nivel_servicio],
               nuevoProveedorArticulo.articulo.desviacion_est_dem,
               nuevoProveedorArticulo.demora_entrega
             )
-
 
             const { Q, R } = await calcularLoteOptimoPuntoPedido(
               nuevoProveedorArticulo,
@@ -117,18 +130,13 @@ export const crearProveedor = async (req, res) => {
             )
 
             // Calculo CGI
-            const costo_pedido = Q === 0 ? null : (D / Q) * S;
+            const costo_pedido = Q === 0 ? null : (D / Q) * S
 
-            const costo_almacenamiento = (Q / 2) * H;
+            const costo_almacenamiento = (Q / 2) * H
 
-            cgi = calcularCGI(
-              costo_almacenamiento,
-              costo_pedido,
-              costo_compra
+            cgi = calcularCGI(costo_almacenamiento, costo_pedido, costo_compra)
 
-            )
-
-            await prisma.modeloInventario.update({
+            await tx.modeloInventario.update({
               where: {
                 id_modelo_inventario:
                   modeloInventarioNuevo.id_modelo_inventario,
@@ -146,7 +154,8 @@ export const crearProveedor = async (req, res) => {
 
           // Para modelo de intervalo fijo
           if (modelo_seleccionado === 'intervalo_fijo') {
-            const desviacion_estandar = nuevoProveedorArticulo.articulo.desviacion_est_dem
+            const desviacion_estandar =
+              nuevoProveedorArticulo.articulo.desviacion_est_dem
             const stock_seguridad = calcularStockSeguridadIF(
               periodo_revision,
               demora_entrega,
@@ -154,19 +163,16 @@ export const crearProveedor = async (req, res) => {
               desviacion_estandar
             )
 
-            const demanda_diaria = nuevoProveedorArticulo.articulo.demanda_articulo / 365;
+            const demanda_diaria =
+              nuevoProveedorArticulo.articulo.demanda_articulo / 365
 
             // Calculo CGI
-            const T = periodo_revision / 365;
-            const costo_pedido = T === 0 ? null : (1 / T) * S;
+            const T = periodo_revision / 365
+            const costo_pedido = T === 0 ? null : (1 / T) * S
 
-            const costo_almacenamiento = ((D * T) / 2) * H;
+            const costo_almacenamiento = ((D * T) / 2) * H
 
-            cgi = calcularCGI(
-              costo_almacenamiento,
-              costo_pedido,
-              costo_compra
-            )
+            cgi = calcularCGI(costo_almacenamiento, costo_pedido, costo_compra)
 
             const inventario_maximo = calcularInventarioMaximo(
               demanda_diaria,
@@ -175,7 +181,7 @@ export const crearProveedor = async (req, res) => {
               nivelServicioZ[nivel_servicio],
               desviacion_estandar
             )
-            await prisma.modeloInventario.update({
+            await tx.modeloInventario.update({
               where: {
                 id_modelo_inventario:
                   modeloInventarioNuevo.id_modelo_inventario,
@@ -192,28 +198,35 @@ export const crearProveedor = async (req, res) => {
           }
 
           // Actualizar CGI
-          await prisma.proveedorArticulo.update({
+          await tx.proveedorArticulo.update({
             where: {
-              id_proveedor_articulo: nuevoProveedorArticulo.id_proveedor_articulo,
+              id_proveedor_articulo:
+                nuevoProveedorArticulo.id_proveedor_articulo,
             },
             data: {
               cgi: cgi,
             },
           })
-
         }
       }
       return nuevoProveedor
     })
 
-    res.status(201).json(resultado)
+    res.status(201).json({
+      message: 'Proveedor creado correctamente',
+      proveedor: resultado,
+      articulos_predeterminado_por_defecto:
+        articulos_predeterminado_por_defecto || '',
+    })
   } catch (error) {
     if (error.code === 'P2002') {
-      return res.status(409).json({ error: 'El email ya está en uso.' })
+      return res
+        .status(409)
+        .json({ error: { message: 'El email ya está en uso' } })
     }
     console.error(error)
     res.status(500).json({
-      error: [{ message: 'Error al crear el proveedor' }],
+      error: { message: 'Error al crear el proveedor' },
     })
   }
 }
