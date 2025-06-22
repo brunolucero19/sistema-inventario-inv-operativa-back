@@ -282,7 +282,7 @@ export const eliminarProveedor = async (req, res) => {
     // // Verificar que el proveedor no tenga órdenes de compra pendientes
     const ordenPendiente = await prisma.ordenCompra.findFirst({
       where: {
-        or: [
+        OR: [
           { id_estado_orden_compra: estadosOC.pendiente },
           { id_estado_orden_compra: estadosOC.enviada },
         ],
