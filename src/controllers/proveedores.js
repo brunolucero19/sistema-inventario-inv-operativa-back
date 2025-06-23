@@ -329,16 +329,18 @@ export const eliminarProveedor = async (req, res) => {
 }
 
 export const modificarProveedor = async (req, res) => {
-  const { id_proveedor } = req.params
+  const { idProveedor } = req.params
   const { nombre, apellido, email, telefono } = req.body
 
-  if (!id_proveedor) {
+  console.log(idProveedor)
+
+  if (!idProveedor) {
     return res.status(400).json({ error: 'Falta el id del proveedor' })
   }
 
   try {
     const proveedor = await prisma.proveedor.findUnique({
-      where: { id_proveedor: +id_proveedor },
+      where: { id_proveedor: +idProveedor },
     })
 
     if (!proveedor) {
@@ -346,7 +348,7 @@ export const modificarProveedor = async (req, res) => {
     }
 
     const updatedProveedor = await prisma.proveedor.update({
-      where: { id_proveedor: +id_proveedor },
+      where: { id_proveedor: +idProveedor },
       data: {
         nombre,
         apellido,
